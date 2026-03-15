@@ -14,7 +14,7 @@ const state = {
   pages: 1,
   total: 0,
   viewMode: 'grid',
-  filters: { q: '', format: '', sort: 'date_added', order: 'desc' },
+  filters: { q: '', format: '', sort: 'title', order: 'asc' },
   activeShelf: null,   // { id, name } when browsing a shelf
   selectedBook: null,
   selectedMeta: null,
