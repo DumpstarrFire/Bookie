@@ -335,8 +335,14 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 24px 16px;
+  padding: 12px 24px;
   flex-wrap: wrap;
+}
+.book-count-label {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .filter-chip {
   display: flex;
@@ -1269,7 +1275,6 @@ textarea.field { resize: vertical; min-height: 80px; }
 @media (max-width: 768px) {
   .nav-rail:not(.expanded) { width: 64px; }
   .book-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
-  .content-header { padding: 16px 16px 12px; }
   .filter-bar {
     padding: 0 16px 12px;
     flex-wrap: nowrap;
@@ -1319,14 +1324,8 @@ textarea.field { resize: vertical; min-height: 80px; }
   .book-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; }
 
   /* Content spacing */
-  .content-header { padding: 12px 12px 8px; }
   .content-area { padding: 0 12px calc(80px + env(safe-area-inset-bottom) + 16px); }
-  .filter-bar { padding: 0 12px 10px; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
-
-  /* Hide "All Books" heading on mobile; keep count + refresh aligned */
-  .library-title-desktop { display: none; }
-  .content-header { flex-wrap: nowrap; }
 
   /* Shelf grid: 1 column */
   .shelf-grid { grid-template-columns: 1fr; }
@@ -1344,21 +1343,18 @@ textarea.field { resize: vertical; min-height: 80px; }
   .dialog-footer { flex-wrap: wrap; padding: 12px 16px; gap: 6px; overflow: visible; }
   .dialog-footer > [style*="flex:1"] { display: none; }
 
-  /* Collapsible filter bar on mobile; layout toggle row always visible */
-  .filter-bar-toggle-row {
-    display: flex;
-    align-items: center;
-    padding: 0 12px 8px;
-  }
+  /* Filter bar on mobile: always visible, scrollable */
   .filter-bar {
-    display: none;
-    flex-direction: column;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 8px 12px 10px;
     gap: 8px;
-    align-items: stretch;
-    padding: 0 12px 12px;
   }
-  .filter-bar.open { display: flex; }
-  /* Hide desktop grid/list toggle and size buttons inside filter bar on mobile */
+  .filter-bar::-webkit-scrollbar { display: none; }
+  /* Hide desktop grid/list toggle, size buttons, and spacer on mobile */
   .filter-bar > .toggle-group,
   .grid-size-btns { display: none; }
   .filter-bar > div[style*="flex:1"] { display: none; }

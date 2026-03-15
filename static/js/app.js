@@ -36,7 +36,9 @@ const THEMES = [
     primaryContainer: '#4F378B',
     onPrimaryContainer: '#EADDFF',
     secondary: '#CCC2DC',
+    onSecondary: '#332D41',
     secondaryContainer: '#4A4458',
+    onSecondaryContainer: '#E8DEF8',
   },
   {
     id: 'teal',
@@ -46,7 +48,9 @@ const THEMES = [
     primaryContainer: '#005662',
     onPrimaryContainer: '#A8EEFF',
     secondary: '#80CBC4',
-    secondaryContainer: '#004D40',
+    onSecondary: '#003731',
+    secondaryContainer: '#1F4E49',
+    onSecondaryContainer: '#9EF2EB',
   },
   {
     id: 'green',
@@ -56,7 +60,9 @@ const THEMES = [
     primaryContainer: '#2D5A2D',
     onPrimaryContainer: '#C4EEC0',
     secondary: '#9CC496',
-    secondaryContainer: '#214521',
+    onSecondary: '#163216',
+    secondaryContainer: '#2A4B27',
+    onSecondaryContainer: '#B8E0B2',
   },
   {
     id: 'rose',
@@ -66,7 +72,9 @@ const THEMES = [
     primaryContainer: '#93000A',
     onPrimaryContainer: '#FFDAD6',
     secondary: '#E7BDB8',
+    onSecondary: '#442927',
     secondaryContainer: '#5D3733',
+    onSecondaryContainer: '#FFDAD6',
   },
   {
     id: 'amber',
@@ -76,7 +84,9 @@ const THEMES = [
     primaryContainer: '#554500',
     onPrimaryContainer: '#FFEEAB',
     secondary: '#D4C68A',
-    secondaryContainer: '#3C3516',
+    onSecondary: '#373000',
+    secondaryContainer: '#4E4600',
+    onSecondaryContainer: '#F0E2A6',
   },
 ];
 
@@ -88,7 +98,9 @@ function applyTheme(themeId) {
   root.style.setProperty('--md-sys-color-primary-container', theme.primaryContainer);
   root.style.setProperty('--md-sys-color-on-primary-container', theme.onPrimaryContainer);
   root.style.setProperty('--md-sys-color-secondary', theme.secondary);
+  root.style.setProperty('--md-sys-color-on-secondary', theme.onSecondary);
   root.style.setProperty('--md-sys-color-secondary-container', theme.secondaryContainer);
+  root.style.setProperty('--md-sys-color-on-secondary-container', theme.onSecondaryContainer);
   localStorage.setItem('colorTheme', themeId);
   // Update swatch selection state
   document.querySelectorAll('.theme-swatch').forEach(s => {
@@ -1414,19 +1426,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // View toggle (desktop filter bar + mobile toggle row)
+  // View toggle (desktop filter bar)
   function setViewMode(mode) {
     state.viewMode = mode;
     document.getElementById('viewGrid').classList.toggle('active', mode === 'grid');
     document.getElementById('viewList').classList.toggle('active', mode === 'list');
-    document.getElementById('mobileViewGrid')?.classList.toggle('active', mode === 'grid');
-    document.getElementById('mobileViewList')?.classList.toggle('active', mode === 'list');
+    // Show grid size buttons only in grid view
+    const sizeBtns = document.getElementById('gridSizeBtns');
+    if (sizeBtns) sizeBtns.style.display = mode === 'grid' ? '' : 'none';
+    localStorage.setItem('viewMode', mode);
     renderBooks(document.getElementById('bookContainer'));
   }
+  // Restore persisted view mode
+  const _savedViewMode = localStorage.getItem('viewMode');
+  if (_savedViewMode === 'list') setViewMode('list');
   document.getElementById('viewGrid').addEventListener('click', () => setViewMode('grid'));
   document.getElementById('viewList').addEventListener('click', () => setViewMode('list'));
-  document.getElementById('mobileViewGrid')?.addEventListener('click', () => setViewMode('grid'));
-  document.getElementById('mobileViewList')?.addEventListener('click', () => setViewMode('list'));
 
   // Search (grid filter + live dropdown)
   let searchTimeout, liveSearchTimeout;
@@ -1530,11 +1545,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const filtered = window._metaResultsList.filter(r => activeSrcs.has(r.source));
       renderMetaResults(filtered);
     }
-  });
-
-  // Filter bar toggle (mobile)
-  document.getElementById('filterBarToggle')?.addEventListener('click', () => {
-    document.getElementById('filterBar')?.classList.toggle('open');
   });
 
   // Send dialog (manual address entry fallback)

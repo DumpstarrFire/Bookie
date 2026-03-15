@@ -434,8 +434,16 @@ def create_app():
     def delete_book(book_id):
         book = Book.query.get_or_404(book_id)
         filepath = BOOKS_DIR / book.filename
+        parent = filepath.parent
         if filepath.exists():
             filepath.unlink()
+        # Clean up empty parent directories (but never BOOKS_DIR itself)
+        try:
+            for folder in [parent, parent.parent]:
+                if folder != BOOKS_DIR and folder.exists() and not any(folder.iterdir()):
+                    folder.rmdir()
+        except Exception:
+            pass
         cover_mgr.delete_cover(book_id)
         db.session.delete(book)
         db.session.commit()
@@ -448,7 +456,7 @@ def create_app():
         filepath = BOOKS_DIR / book.filename
         if not filepath.exists():
             abort(404)
-        return send_file(str(filepath), as_attachment=True, download_name=book.filename)
+        return send_file(str(filepath), as_attachment=True, download_name=Path(book.filename).name)
 
     @app.route("/api/books/<int:book_id>/rename", methods=["POST"])
     @login_required
