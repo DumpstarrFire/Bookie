@@ -420,6 +420,13 @@ def create_app():
             if f in data:
                 setattr(book, f, data[f])
         db.session.commit()
+        # Re-apply rename/organize after metadata update
+        file_path = BOOKS_DIR / book.filename
+        if file_path.exists():
+            try:
+                _rename_and_organize(book, file_path)
+            except Exception as exc:
+                logger.warning("Rename after save failed for book %s: %s", book_id, exc)
         return jsonify(book.to_dict())
 
     @app.route("/api/books/<int:book_id>", methods=["DELETE"])
@@ -571,6 +578,13 @@ def create_app():
         meta = request.get_json(force=True) or {}
         # Explicit user selection always replaces all fields
         _apply_metadata(book, meta, replace_missing_only=False)
+        # Re-apply rename/organize after metadata import
+        file_path = BOOKS_DIR / book.filename
+        if file_path.exists():
+            try:
+                _rename_and_organize(book, file_path)
+            except Exception as exc:
+                logger.warning("Rename after metadata apply failed for book %s: %s", book_id, exc)
         return jsonify(book.to_dict())
 
     @app.route("/api/metadata/search", methods=["GET"])
@@ -593,9 +607,7 @@ def create_app():
         disabled = {s.strip() for s in disabled_raw.split(",") if s.strip()}
         sources = [s for s in requested if s not in disabled]
 
-        lt_raw = Settings.get("librarything_key", "")
-        api_keys = {"librarything": _decrypt_api_key(lt_raw) if lt_raw else ""}
-        return jsonify(scraper.search_all_sources(query, sources=sources, api_keys=api_keys))
+        return jsonify(scraper.search_all_sources(query, sources=sources))
 
     @app.route("/api/metadata/sources", methods=["GET"])
     @login_required
@@ -908,13 +920,12 @@ def create_app():
         "smtp_tls", "smtp_sender", "kindle_email",
         "auto_metadata", "default_metadata_source", "meta_replace_missing",
         "source_priority", "sources_disabled", "folder_organization",
-        "librarything_key",
         "books_per_page", "default_view",
         "rename_scheme", "rename_custom_template",
     ]
 
     _MASKED = "••••••••"
-    _MASKED_KEYS = {"smtp_password", "librarything_key"}
+    _MASKED_KEYS = {"smtp_password"}
 
     @app.route("/api/settings", methods=["GET"])
     @login_required
@@ -940,9 +951,6 @@ def create_app():
             # Skip masked placeholder writes
             if key in _MASKED_KEYS and val == _MASKED:
                 continue
-            # Encrypt API keys before storing
-            if key == "librarything_key" and val:
-                val = _encrypt_api_key(str(val))
             Settings.set(key, str(val) if val is not None else None)
         return jsonify({"success": True})
 
@@ -1194,11 +1202,7 @@ def _auto_fetch_metadata(book: Book):
         if s.strip() and s.strip() not in disabled
     ]
 
-    # Decrypt API keys
-    lt_raw = Settings.get("librarything_key", "")
-    api_keys = {"librarything": _decrypt_api_key(lt_raw) if lt_raw else ""}
-
-    results = scraper.search_all_sources(query, sources=sources, api_keys=api_keys)
+    results = scraper.search_all_sources(query, sources=sources)
     if results:
         _apply_metadata(book, results[0])
 

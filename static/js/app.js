@@ -165,15 +165,9 @@ function bookCard(b) {
       <div class="book-author">${esc(b.author || 'Unknown author')}</div>
     </div>
     <div class="book-actions" onclick="event.stopPropagation()">
-      <button class="icon-btn-sm" onclick="handleCardSend(event,${b.id})" title="Send">
-        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
+      <button class="icon-btn-sm" onclick="openCardMenu(event,${b.id})" title="More options">
+        <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
       </button>
-      <button class="icon-btn-sm" onclick="openAddToShelf(${b.id})" title="Add to shelf">
-        <svg viewBox="0 0 24 24"><path d="M2 4v16h20V4H2zm2 2h16v4H4V6zm0 6h4v6H4v-6zm6 6v-6h4v6h-4zm6 0v-6h4v6h-4z"/></svg>
-      </button>
-      <a class="icon-btn-sm" href="/api/books/${b.id}/download" title="Download">
-        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-      </a>
     </div>
   </div>`;
 }
@@ -191,12 +185,9 @@ function bookListItem(b) {
       <div class="book-list-meta">${esc(b.author || 'Unknown')} · ${(b.file_format||'').toUpperCase()}${shelves}</div>
     </div>
     <div class="book-list-actions" onclick="event.stopPropagation()">
-      <button class="icon-btn" onclick="handleCardSend(event,${b.id})" title="Send">
-        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
+      <button class="icon-btn" onclick="openCardMenu(event,${b.id})" title="More options">
+        <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
       </button>
-      <a class="icon-btn" href="/api/books/${b.id}/download" title="Download">
-        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-      </a>
     </div>
   </div>`;
 }
@@ -326,16 +317,6 @@ async function openBook(id) {
     <div style="flex:1"></div>
     <button class="btn btn-outlined" onclick="openMetaSearch(${id})">Find Metadata</button>
     <button class="btn btn-tonal" onclick="openAddToShelf(${id})">Add to Shelf</button>
-    <div class="send-split-btn" id="bookDetailSendBtn">
-      <button class="send-main" onclick="sendToDefault(${id})">
-        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
-        Send
-      </button>
-      <button class="send-arrow" onclick="openSendPicker(${id}, this)" title="Choose address">
-        <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
-      </button>
-    </div>
-    <a class="btn btn-outlined" href="/api/books/${id}/download">Download</a>
     <button class="btn btn-filled" onclick="saveBook(${id})">Save</button>`;
 
   openDialog('bookDialog');
@@ -397,7 +378,7 @@ async function searchMeta() {
   renderMetaResults(list);
 }
 
-const SOURCE_LABELS = { google_books: 'Google Books', open_library: 'Open Library', itunes: 'Apple Books', goodreads: 'GoodReads', librarything: 'LibraryThing' };
+const SOURCE_LABELS = { google_books: 'Google Books', open_library: 'Open Library', itunes: 'Apple Books', goodreads: 'GoodReads' };
 
 function renderMetaResults(list) {
   if (!list.length) {
@@ -686,6 +667,47 @@ async function openSendPicker(bookId, anchorEl) {
 
 function closeSendPicker() {
   document.getElementById('sendPickerPopup')?.remove();
+}
+
+// ── Book Card Context Menu ─────────────────────────────────
+function openCardMenu(event, bookId) {
+  event.stopPropagation();
+  closeCardMenu();
+
+  const menu = document.createElement('div');
+  menu.id = 'cardMenuPopup';
+  menu.className = 'card-menu-popup';
+  menu.innerHTML = `
+    <button onclick="handleCardSend(event,${bookId});closeCardMenu()">
+      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
+      Send
+    </button>
+    <button onclick="openAddToShelf(${bookId});closeCardMenu()">
+      <svg viewBox="0 0 24 24"><path d="M2 4v16h20V4H2zm2 2h16v4H4V6zm0 6h4v6H4v-6zm6 6v-6h4v6h-4zm6 0v-6h4v6h-4z"/></svg>
+      Add to Shelf
+    </button>
+    <a href="/api/books/${bookId}/download" onclick="closeCardMenu()">
+      <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+      Download
+    </a>`;
+
+  document.body.appendChild(menu);
+
+  const btn = event.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  const menuWidth = 180;
+  let left = rect.right - menuWidth;
+  if (left < 8) left = 8;
+  let top = rect.bottom + 4;
+  if (top + 140 > window.innerHeight) top = rect.top - 140;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+
+  setTimeout(() => document.addEventListener('click', closeCardMenu, { once: true }), 10);
+}
+
+function closeCardMenu() {
+  document.getElementById('cardMenuPopup')?.remove();
 }
 
 async function pickAndSend(bookId, email, label) {
@@ -998,12 +1020,6 @@ async function loadSettings() {
   setVal('folderOrganization', data.folder_organization || 'flat');
   setVal('renameScheme', data.rename_scheme || 'original');
   setVal('renameCustomTemplate', data.rename_custom_template || '');
-  // Show API key as placeholder dots if set (server always returns '••••••••' or '')
-  const ltInput = document.getElementById('librarythingKey');
-  if (ltInput) {
-    ltInput.value = '';
-    ltInput.placeholder = data.librarything_key === '••••••••' ? '••••••••••••' : 'Your LibraryThing API key';
-  }
   toggleCustomScheme();
   renderSourceToggles(srcData);
 }
@@ -1104,17 +1120,6 @@ async function saveFolder() {
   snack('Folder organisation saved!');
 }
 
-async function saveApiKeys() {
-  const ltInput = document.getElementById('librarythingKey');
-  const ltVal = ltInput.value.trim();
-  // Skip if user hasn't typed a new key (placeholder dots are just display)
-  if (!ltVal) { snack('Enter a new key to save'); return; }
-  await api('/api/settings', { method: 'PUT', body: JSON.stringify({ librarything_key: ltVal }) });
-  ltInput.value = '';
-  ltInput.placeholder = '••••••••••••';
-  window._srcData = null; // refresh source cache in case LT is now usable
-  snack('API key saved!');
-}
 
 async function saveSources() {
   const rows = [...document.querySelectorAll('#sourceToggles .source-toggle-row')];
@@ -1254,8 +1259,16 @@ function closeSearchDropdown() {
 }
 
 // ── Dialog helpers ───────────────────────────────────────
-function openDialog(id) { document.getElementById(id).classList.add('open'); }
-function closeDialog(id) { document.getElementById(id).classList.remove('open'); }
+function openDialog(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.classList.add('modal-open');
+}
+function closeDialog(id) {
+  document.getElementById(id).classList.remove('open');
+  if (!document.querySelector('.dialog-scrim.open')) {
+    document.body.classList.remove('modal-open');
+  }
+}
 
 // ── DOM helpers ──────────────────────────────────────────
 function v(id) { return (document.getElementById(id) || {}).value || ''; }
@@ -1356,6 +1369,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!e.target.closest('.search-bar')) closeSearchDropdown();
   });
 
+  // Mobile search bar: tap the icon to expand, collapse on outside click when empty
+  const searchBar = document.querySelector('.search-bar');
+  searchBar?.querySelector('svg')?.addEventListener('click', e => {
+    if (window.innerWidth <= 600 && !searchBar.classList.contains('expanded')) {
+      e.stopPropagation();
+      searchBar.classList.add('expanded');
+      searchInput.focus();
+    }
+  });
+  document.addEventListener('click', e => {
+    if (window.innerWidth <= 600 && searchBar && !searchBar.contains(e.target)) {
+      if (!searchInput.value.trim()) {
+        searchBar.classList.remove('expanded');
+      }
+    }
+  });
+  searchInput.addEventListener('blur', () => {
+    if (window.innerWidth <= 600 && !searchInput.value.trim()) {
+      setTimeout(() => searchBar?.classList.remove('expanded'), 200);
+    }
+  });
+
   // Format filter dropdown
   document.getElementById('formatSelect')?.addEventListener('change', e => {
     state.filters.format = e.target.value;
@@ -1397,11 +1432,17 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('metaQuery').addEventListener('keydown', e => { if (e.key === 'Enter') searchMeta(); });
   document.getElementById('applyMetaBtn').addEventListener('click', applyMeta);
 
-  // Metadata source chips: toggle search-active state
+  // Metadata source chips: toggle active state and re-filter displayed results
   document.getElementById('metaSourceChips')?.addEventListener('click', e => {
     const chip = e.target.closest('.filter-chip[data-src]');
     if (!chip) return;
     chip.classList.toggle('active');
+    // Immediately re-filter currently displayed results by active sources
+    if (window._metaResultsList) {
+      const activeSrcs = new Set(_activeSources());
+      const filtered = window._metaResultsList.filter(r => activeSrcs.has(r.source));
+      renderMetaResults(filtered);
+    }
   });
 
   // Filter bar toggle (mobile)
@@ -1459,7 +1500,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('testSmtpBtn')?.addEventListener('click', testSmtp);
   document.getElementById('sendTestEmailBtn')?.addEventListener('click', sendTestEmail);
   document.getElementById('saveMetaBtn')?.addEventListener('click', saveMeta);
-  document.getElementById('saveApiKeysBtn')?.addEventListener('click', saveApiKeys);
   document.getElementById('saveSourcesBtn')?.addEventListener('click', saveSources);
   document.getElementById('saveRenameBtn')?.addEventListener('click', saveRename);
   document.getElementById('saveFolderBtn')?.addEventListener('click', saveFolder);
