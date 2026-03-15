@@ -113,6 +113,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -122,7 +123,8 @@ body {
   align-items: center;
   gap: 12px;
   padding: 0 16px;
-  height: 64px;
+  padding-top: env(safe-area-inset-top);
+  height: calc(64px + env(safe-area-inset-top));
   background: var(--md-sys-color-surface-container);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   z-index: 100;
@@ -312,10 +314,11 @@ body {
   display: flex;
   flex-direction: column;
 }
+.library-title-desktop { display: none; }
 .content-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 24px 24px 16px;
   gap: 16px;
   flex-wrap: wrap;
@@ -395,7 +398,7 @@ select.filter-select {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0,0,0,.5);
 }
-.book-card:hover .book-actions { opacity: 1; }
+/* book-actions is now always visible inside book-info */
 .book-cover {
   width: 100%;
   aspect-ratio: 2 / 3;
@@ -412,7 +415,13 @@ select.filter-select {
   background: var(--md-sys-color-surface-container-high);
 }
 .book-cover-placeholder svg { width: 48px; height: 48px; fill: var(--md-sys-color-outline); }
-.book-info { padding: 10px 10px 12px; }
+.book-info {
+  padding: 8px 8px 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.book-info-text { flex: 1; min-width: 0; }
 .book-title {
   font-size: 13px;
   font-weight: 500;
@@ -445,16 +454,9 @@ select.filter-select {
   letter-spacing: .5px;
 }
 .book-actions {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  flex-shrink: 0;
   display: flex;
-  gap: 4px;
-  padding: 8px;
-  background: linear-gradient(transparent, rgba(0,0,0,.8));
-  opacity: 0;
-  transition: opacity 150ms;
+  align-items: flex-start;
 }
 .book-actions .icon-btn-sm {
   width: 32px; height: 32px;
@@ -1619,6 +1621,30 @@ textarea.field { resize: vertical; min-height: 80px; }
 /* ── Modal scroll lock ─────────────────────────────────── */
 body.modal-open { overflow: hidden; }
 
+/* ── Color Theme Swatches ──────────────────────────────── */
+.theme-swatch {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--md-sys-shape-corner-full);
+  border: 3px solid transparent;
+  cursor: pointer;
+  position: relative;
+  transition: transform 150ms, border-color 150ms;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.theme-swatch:hover { transform: scale(1.1); }
+.theme-swatch.selected { border-color: var(--md-sys-color-on-surface); }
+.theme-swatch-check {
+  display: none;
+  width: 20px;
+  height: 20px;
+  fill: #000;
+}
+.theme-swatch-check svg { width: 20px; height: 20px; fill: rgba(0,0,0,.7); }
+.theme-swatch.selected .theme-swatch-check { display: flex; }
+
 /* ── Book Card Context Menu ────────────────────────────── */
 .card-menu-popup {
   position: fixed;
@@ -1648,6 +1674,23 @@ body.modal-open { overflow: hidden; }
 .card-menu-popup button:hover,
 .card-menu-popup a:hover { background: rgba(208,188,255,.08); }
 .card-menu-popup svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
+/* Split send row inside card menu */
+.card-menu-send-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+.card-menu-send-main {
+  flex: 1;
+  border-right: 1px solid var(--md-sys-color-outline-variant) !important;
+  border-radius: 0 !important;
+}
+.card-menu-send-arrow {
+  width: 40px !important;
+  padding: 0 !important;
+  justify-content: center !important;
+  flex-shrink: 0;
+}
 
 /* ── Mobile search bar: collapsed to icon, expands on tap ─ */
 @media (max-width: 600px) {
@@ -1664,12 +1707,15 @@ body.modal-open { overflow: hidden; }
   .search-bar input,
   .search-bar #searchDropdown { display: none; }
   .search-bar.expanded {
-    flex: 1;
-    width: auto;
+    flex: 1 1 0;
+    width: 0;
+    min-width: 120px;
+    max-width: none;
     padding: 0 16px;
+    overflow: visible;
     cursor: default;
   }
-  .search-bar.expanded input { display: block; }
+  .search-bar.expanded input { display: block; min-width: 0; }
   .search-bar.expanded #searchDropdown { display: block; }
   .search-bar svg { cursor: pointer; }
 }

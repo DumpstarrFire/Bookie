@@ -26,6 +26,90 @@ const state = {
   selectedCoverUrl: null,
 };
 
+// ── Color Themes ─────────────────────────────────────────
+const THEMES = [
+  {
+    id: 'violet',
+    label: 'Violet',
+    primary: '#D0BCFF',
+    onPrimary: '#381E72',
+    primaryContainer: '#4F378B',
+    onPrimaryContainer: '#EADDFF',
+    secondary: '#CCC2DC',
+    secondaryContainer: '#4A4458',
+  },
+  {
+    id: 'teal',
+    label: 'Teal',
+    primary: '#80DEEA',
+    onPrimary: '#003F47',
+    primaryContainer: '#005662',
+    onPrimaryContainer: '#A8EEFF',
+    secondary: '#80CBC4',
+    secondaryContainer: '#004D40',
+  },
+  {
+    id: 'green',
+    label: 'Green',
+    primary: '#A8D5A2',
+    onPrimary: '#1A3D1A',
+    primaryContainer: '#2D5A2D',
+    onPrimaryContainer: '#C4EEC0',
+    secondary: '#9CC496',
+    secondaryContainer: '#214521',
+  },
+  {
+    id: 'rose',
+    label: 'Rose',
+    primary: '#FFB4AB',
+    onPrimary: '#690005',
+    primaryContainer: '#93000A',
+    onPrimaryContainer: '#FFDAD6',
+    secondary: '#E7BDB8',
+    secondaryContainer: '#5D3733',
+  },
+  {
+    id: 'amber',
+    label: 'Amber',
+    primary: '#FFD873',
+    onPrimary: '#3A2F00',
+    primaryContainer: '#554500',
+    onPrimaryContainer: '#FFEEAB',
+    secondary: '#D4C68A',
+    secondaryContainer: '#3C3516',
+  },
+];
+
+function applyTheme(themeId) {
+  const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
+  const root = document.documentElement;
+  root.style.setProperty('--md-sys-color-primary', theme.primary);
+  root.style.setProperty('--md-sys-color-on-primary', theme.onPrimary);
+  root.style.setProperty('--md-sys-color-primary-container', theme.primaryContainer);
+  root.style.setProperty('--md-sys-color-on-primary-container', theme.onPrimaryContainer);
+  root.style.setProperty('--md-sys-color-secondary', theme.secondary);
+  root.style.setProperty('--md-sys-color-secondary-container', theme.secondaryContainer);
+  localStorage.setItem('colorTheme', themeId);
+  // Update swatch selection state
+  document.querySelectorAll('.theme-swatch').forEach(s => {
+    s.classList.toggle('selected', s.dataset.theme === themeId);
+  });
+}
+
+function renderThemeSwatches() {
+  const container = document.getElementById('themeSwatches');
+  if (!container) return;
+  const active = localStorage.getItem('colorTheme') || 'violet';
+  container.innerHTML = THEMES.map(t => `
+    <button class="theme-swatch${t.id === active ? ' selected' : ''}" data-theme="${t.id}"
+      onclick="applyTheme('${t.id}')" title="${t.label}"
+      style="background:${t.primary}">
+      <span class="theme-swatch-check">
+        <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      </span>
+    </button>`).join('');
+}
+
 // ── API helpers ──────────────────────────────────────────
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -73,7 +157,6 @@ function navigate(view, opts = {}) {
   // (FAB removed)
 
   if (view === 'library') {
-    document.getElementById('libraryTitle').textContent = opts.shelf ? opts.shelf.name : 'All Books';
     state.page = 1;
     loadBooks();
   } else if (view === 'shelves') {
@@ -103,6 +186,7 @@ function activateSettingsTab(target) {
   history.replaceState(null, '', `#settings/${target}`);
   if (target === 'libstats') loadStats();
   if (target === 'logs') loadLogs();
+  if (target === 'account') renderThemeSwatches();
 }
 
 // ── Books ────────────────────────────────────────────────
@@ -161,13 +245,15 @@ function bookCard(b) {
     ${cover}
     <span class="book-format-badge">${esc(b.file_format || '?')}</span>
     <div class="book-info">
-      <div class="book-title">${esc(b.title || 'Untitled')}</div>
-      <div class="book-author">${esc(b.author || 'Unknown author')}</div>
-    </div>
-    <div class="book-actions" onclick="event.stopPropagation()">
-      <button class="icon-btn-sm" onclick="openCardMenu(event,${b.id})" title="More options">
-        <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-      </button>
+      <div class="book-info-text">
+        <div class="book-title">${esc(b.title || 'Untitled')}</div>
+        <div class="book-author">${esc(b.author || 'Unknown author')}</div>
+      </div>
+      <div class="book-actions" onclick="event.stopPropagation()">
+        <button class="icon-btn-sm" onclick="openCardMenu(event,${b.id})" title="More options">
+          <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        </button>
+      </div>
     </div>
   </div>`;
 }
@@ -355,7 +441,6 @@ async function openMetaSearch(bookId) {
   if (!window._srcData) window._srcData = await apiJSON('/api/metadata/sources');
   renderSourceChips(window._srcData);
   openDialog('metaDialog');
-  if (query) searchMeta();
 }
 
 function _activeSources() {
@@ -678,10 +763,15 @@ function openCardMenu(event, bookId) {
   menu.id = 'cardMenuPopup';
   menu.className = 'card-menu-popup';
   menu.innerHTML = `
-    <button onclick="handleCardSend(event,${bookId});closeCardMenu()">
-      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
-      Send
-    </button>
+    <div class="card-menu-send-row" onclick="event.stopPropagation()">
+      <button class="card-menu-send-main" onclick="closeCardMenu();sendToDefault(${bookId})">
+        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
+        Send
+      </button>
+      <button class="card-menu-send-arrow" title="Choose address" onclick="event.stopPropagation();openSendPicker(${bookId},this)">
+        <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+      </button>
+    </div>
     <button onclick="openAddToShelf(${bookId});closeCardMenu()">
       <svg viewBox="0 0 24 24"><path d="M2 4v16h20V4H2zm2 2h16v4H4V6zm0 6h4v6H4v-6zm6 6v-6h4v6h-4zm6 0v-6h4v6h-4z"/></svg>
       Add to Shelf
@@ -1032,9 +1122,6 @@ function renderSourceChips(srcData) {
   container.innerHTML = priority.map(s =>
     `<button class="filter-chip active" data-src="${s}">${esc(SOURCE_LABELS[s] || s)}</button>`
   ).join('');
-  container.querySelectorAll('.filter-chip').forEach(btn => {
-    btn.addEventListener('click', () => btn.classList.toggle('active'));
-  });
 }
 
 function renderSourceToggles(srcData) {
@@ -1545,6 +1632,10 @@ document.addEventListener('DOMContentLoaded', () => {
   fetch('/api/auth/status').then(r => r.json()).then(d => {
     if (d.username) document.getElementById('userMenuLabel').textContent = 'Signed in as ' + d.username;
   });
+
+  // Apply saved color theme
+  const _savedTheme = localStorage.getItem('colorTheme');
+  if (_savedTheme) applyTheme(_savedTheme);
 
   // Restore view from URL hash (set by navigate(); survives refresh/bookmark/share)
   const _VIEWS = ['library', 'shelves', 'upload', 'settings'];

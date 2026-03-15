@@ -55,28 +55,57 @@ def _find_cover_in_opf(zf: zipfile.ZipFile, opf_path: str) -> str | None:
     """Find cover image href from OPF manifest."""
     try:
         opf = zf.read(opf_path).decode("utf-8", errors="replace")
-        # Look for <item id="cover-image" ...> or properties="cover-image"
-        m = re.search(
-            r'<item[^>]+(?:id=["\']cover["\']|properties=["\']cover-image["\'])[^>]+href=["\']([^"\']+)["\']',
-            opf,
-            re.IGNORECASE,
+
+        def _item_href(item_tag: str) -> str | None:
+            """Extract href from an <item ...> tag string."""
+            m = re.search(r'\bhref=["\']([^"\']+)["\']', item_tag)
+            return m.group(1) if m else None
+
+        # EPUB3: properties="cover-image"
+        prop_m = re.search(r'<item\b[^>]*\bproperties=["\']cover-image["\'][^>]*/?>',
+                            opf, re.IGNORECASE)
+        if prop_m:
+            href = _item_href(prop_m.group(0))
+            if href:
+                base = str(Path(opf_path).parent)
+                full = str(Path(base) / href) if base != "." else href
+                if full in zf.namelist():
+                    return full
+
+        # EPUB2: <meta name="cover" content="id"/> then look up item by id
+        meta_m = re.search(
+            r'<meta\b[^>]*\bname=["\']cover["\'][^>]*\bcontent=["\']([^"\']+)["\']'
+            r'|<meta\b[^>]*\bcontent=["\']([^"\']+)["\'][^>]*\bname=["\']cover["\']',
+            opf, re.IGNORECASE,
         )
-        if not m:
-            # Fallback: <meta name="cover" content="cover-image-id"/>
-            meta_m = re.search(r'<meta\s+name=["\']cover["\'][^>]+content=["\']([^"\']+)["\']', opf, re.IGNORECASE)
-            if meta_m:
-                item_id = meta_m.group(1)
-                item_m = re.search(
-                    rf'<item[^>]+id=["\']' + re.escape(item_id) + r'["\'][^>]+href=["\']([^"\']+)["\']', opf
-                )
-                if item_m:
-                    m = item_m
-        if not m:
-            return None
-        href = m.group(1)
-        base = str(Path(opf_path).parent)
-        full = str(Path(base) / href) if base != "." else href
-        return full if full in zf.namelist() else None
+        if meta_m:
+            item_id = meta_m.group(1) or meta_m.group(2)
+            item_m = re.search(
+                r'<item\b[^>]*\bid=["\']' + re.escape(item_id) + r'["\'][^>]*/?>',
+                opf, re.IGNORECASE,
+            )
+            if item_m:
+                href = _item_href(item_m.group(0))
+                if href:
+                    base = str(Path(opf_path).parent)
+                    full = str(Path(base) / href) if base != "." else href
+                    if full in zf.namelist():
+                        return full
+
+        # Fallback: item with id containing "cover"
+        cover_id_m = re.search(
+            r'<item\b[^>]*\bid=["\'][^"\']*cover[^"\']*["\'][^>]*/?>',
+            opf, re.IGNORECASE,
+        )
+        if cover_id_m:
+            href = _item_href(cover_id_m.group(0))
+            if href:
+                base = str(Path(opf_path).parent)
+                full = str(Path(base) / href) if base != "." else href
+                if full in zf.namelist():
+                    return full
+
+        return None
     except Exception:
         return None
 
@@ -155,26 +184,32 @@ def embed_cover_in_epub(epub_path: str, cover_data: bytes) -> bool:
         cover_item = None
         if opf_path and opf_path in contents:
             opf_text = contents[opf_path].decode("utf-8", errors="replace")
-            # Try OPF2 <meta name="cover" content="..."/>
-            meta_m = re.search(r'<meta\s+name=["\']cover["\'][^>]+content=["\']([^"\']+)["\']', opf_text, re.IGNORECASE)
+            # Try OPF2 <meta name="cover" content="..."/> (attribute order independent)
+            meta_m = re.search(
+                r'<meta\b[^>]*\bname=["\']cover["\'][^>]*\bcontent=["\']([^"\']+)["\']'
+                r'|<meta\b[^>]*\bcontent=["\']([^"\']+)["\'][^>]*\bname=["\']cover["\']',
+                opf_text, re.IGNORECASE,
+            )
             if meta_m:
-                item_id = meta_m.group(1)
+                item_id = meta_m.group(1) or meta_m.group(2)
                 item_m = re.search(
-                    r'<item[^>]+id=["\']' + re.escape(item_id) + r'["\'][^>]+href=["\']([^"\']+)["\']',
+                    r'<item\b[^>]*\bid=["\']' + re.escape(item_id) + r'["\'][^>]*\bhref=["\']([^"\']+)["\']'
+                    r'|<item\b[^>]*\bhref=["\']([^"\']+)["\'][^>]*\bid=["\']' + re.escape(item_id) + r'["\']',
                     opf_text,
                 )
                 if item_m:
-                    href = item_m.group(1)
+                    href = item_m.group(1) or item_m.group(2)
                     base = str(Path(opf_path).parent)
                     cover_item = (str(Path(base) / href) if base != "." else href)
             if not cover_item:
-                # Try properties="cover-image"
+                # Try EPUB3 properties="cover-image" (attribute order independent)
                 prop_m = re.search(
-                    r'<item[^>]+properties=["\']cover-image["\'][^>]+href=["\']([^"\']+)["\']',
+                    r'<item\b[^>]*\bproperties=["\']cover-image["\'][^>]*\bhref=["\']([^"\']+)["\']'
+                    r'|<item\b[^>]*\bhref=["\']([^"\']+)["\'][^>]*\bproperties=["\']cover-image["\']',
                     opf_text, re.IGNORECASE,
                 )
                 if prop_m:
-                    href = prop_m.group(1)
+                    href = prop_m.group(1) or prop_m.group(2)
                     base = str(Path(opf_path).parent)
                     cover_item = (str(Path(base) / href) if base != "." else href)
 
