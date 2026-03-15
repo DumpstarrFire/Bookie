@@ -1,8 +1,7 @@
-"""Metadata scraping from Google Books, Open Library, iTunes, GoodReads, and LibraryThing."""
+"""Metadata scraping from Google Books, Open Library, iTunes, and GoodReads."""
 import re
 import time
 import logging
-import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
@@ -282,88 +281,6 @@ def _parse_gr_book_page(html: str, book_id: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# LibraryThing  (requires API key for full metadata; covers are key-based)
-# ---------------------------------------------------------------------------
-
-def search_librarything(query: str, api_key: str = "", max_results: int = 8) -> list[dict]:
-    """
-    Search LibraryThing via the thingTitle API.
-    Parses the XML response directly – no secondary REST call needed.
-    Requires a LibraryThing developer API key.
-    """
-    if not api_key:
-        return []
-
-    title_url = f"https://www.librarything.com/api/{api_key}/thingTitle/{requests.utils.quote(query)}"
-    try:
-        r = requests.get(title_url, headers=HEADERS, timeout=12)
-        r.raise_for_status()
-        root = ET.fromstring(r.text)
-    except Exception as exc:
-        logger.warning("LibraryThing thingTitle failed: %s", exc)
-        return []
-
-    results = []
-    seen_ids: set[str] = set()
-
-    # thingTitle returns <ltml> with nested <item> elements, or a flat list
-    # depending on API version.  Search both depths.
-    items = root.findall(".//item") or root.findall("item")
-    if not items:
-        # Older format: root IS the item-list; individual isbn/title siblings
-        items = [root]
-
-    for item in items[:max_results]:
-        work_id = item.get("id", "")
-        if work_id and work_id in seen_ids:
-            continue
-        if work_id:
-            seen_ids.add(work_id)
-
-        title_el = item.find("title")
-        title = (title_el.text or "").strip() if title_el is not None else None
-
-        # Author may be an element or attribute
-        author_el = item.find("author")
-        if author_el is not None:
-            author = (author_el.text or "").strip() or author_el.get("displayForm", "")
-        else:
-            author = item.get("author", "") or None
-
-        # Collect ISBNs
-        all_isbns = [el.text.strip() for el in item.findall("isbn") if el.text]
-        isbn10 = next((i for i in all_isbns if len(i) == 10), None)
-        isbn13 = next((i for i in all_isbns if len(i) == 13), None)
-        cover_isbn = isbn13 or isbn10 or (all_isbns[0] if all_isbns else None)
-
-        if not title and not cover_isbn:
-            continue
-
-        cover_url = (
-            f"https://covers.librarything.com/devkey/{api_key}/large/isbn/{cover_isbn}"
-            if cover_isbn else None
-        )
-
-        results.append({
-            "source": "librarything",
-            "_lt_work_id": work_id,
-            "title": title,
-            "author": author or None,
-            "publisher": None,
-            "published_date": None,
-            "description": None,
-            "page_count": None,
-            "categories": None,
-            "language": None,
-            "isbn": isbn10,
-            "isbn13": isbn13,
-            "rating": None,
-            "cover_url": cover_url,
-        })
-
-    return results
-
 
 # ---------------------------------------------------------------------------
 # Cover search by ISBN (dedicated cover lookup)
@@ -396,17 +313,15 @@ SOURCE_FNS = {
     "open_library":  search_open_library,
     "itunes":        search_itunes,
     "goodreads":     search_goodreads,
-    # librarything is handled separately (needs api_key, rate-limited)
 }
 
-DEFAULT_SOURCE_ORDER = ["google_books", "open_library", "itunes", "goodreads", "librarything"]
+DEFAULT_SOURCE_ORDER = ["google_books", "open_library", "itunes", "goodreads"]
 
 SOURCE_LABELS = {
     "google_books":  "Google Books",
     "open_library":  "Open Library",
     "itunes":        "Apple Books",
     "goodreads":     "GoodReads",
-    "librarything":  "LibraryThing",
 }
 
 
@@ -415,21 +330,17 @@ def search_all_sources(
     sources: list[str] | None = None,
     api_keys: dict | None = None,
 ) -> list[dict]:
-    """
-    Search all requested sources; parallel for fast sources, sequential for rate-limited.
-    api_keys: dict with keys like {"librarything": "mykey"}
-    """
+    """Search all requested sources in parallel."""
     if sources is None:
         sources = DEFAULT_SOURCE_ORDER
     if api_keys is None:
         api_keys = {}
 
-    fast_sources = [s for s in sources if s in SOURCE_FNS]
+    active_sources = [s for s in sources if s in SOURCE_FNS]
     results_by_source: dict[str, list[dict]] = {}
 
-    # Parallel search for fast sources
     with ThreadPoolExecutor(max_workers=4) as ex:
-        futures = {ex.submit(SOURCE_FNS[s], query): s for s in fast_sources}
+        futures = {ex.submit(SOURCE_FNS[s], query): s for s in active_sources}
         for fut in as_completed(futures):
             src = futures[fut]
             try:
@@ -437,11 +348,6 @@ def search_all_sources(
             except Exception as exc:
                 logger.warning("Source %s failed: %s", src, exc)
                 results_by_source[src] = []
-
-    # LibraryThing (rate-limited, sequential)
-    if "librarything" in sources:
-        lt_key = api_keys.get("librarything", "")
-        results_by_source["librarything"] = search_librarything(query, lt_key)
 
     # Return in priority order
     flat: list[dict] = []
