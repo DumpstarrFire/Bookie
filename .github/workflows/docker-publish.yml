@@ -82,7 +82,7 @@ jobs:
         run: |
           username="${{ secrets.DOCKERHUB_USERNAME }}"
           if [ -n "$username" ]; then
-            echo "image=docker.io/${username}/booker" >> $GITHUB_OUTPUT
+            echo "image=docker.io/${username}/bookie" >> $GITHUB_OUTPUT
           else
             echo "image=" >> $GITHUB_OUTPUT
           fi
@@ -99,7 +99,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=pr
           labels: |
-            org.opencontainers.image.title=Booker
+            org.opencontainers.image.title=bookie
             org.opencontainers.image.description=Self-hosted ebook manager with Material Design 3 dark UI
             org.opencontainers.image.vendor=${{ github.repository_owner }}
 
