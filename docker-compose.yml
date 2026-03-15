@@ -1,0 +1,42 @@
+services:
+  booker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: booker:latest
+    container_name: booker
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5000}:5000"
+    volumes:
+      - booker_data:/app/data
+    environment:
+      # ── Security ──────────────────────────────────────
+      SECRET_KEY: "${SECRET_KEY:-change-me-to-a-long-random-string}"
+
+      # ── Default credentials (change after first login) ─
+      BOOKER_USERNAME: "${BOOKER_USERNAME:-admin}"
+      BOOKER_PASSWORD: "${BOOKER_PASSWORD:-booker}"
+
+      # ── Upload limits ──────────────────────────────────
+      MAX_UPLOAD_MB: "${MAX_UPLOAD_MB:-500}"
+
+      # ── Paths (inside container) ───────────────────────
+      BOOKS_DIR: /app/data/books
+      COVERS_DIR: /app/data/covers
+
+      # ── Optional: pre-configure SMTP ──────────────────
+      # These can also be set in the Settings UI instead
+      # SMTP_HOST: smtp.gmail.com
+      # SMTP_PORT: 587
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/login')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  booker_data:
+    driver: local
