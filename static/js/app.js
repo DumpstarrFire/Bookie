@@ -1192,7 +1192,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeAddToShelfBtn').addEventListener('click', () => closeDialog('addToShelfDialog'));
   document.getElementById('closeCoverDialog').addEventListener('click', () => closeDialog('coverDialog'));
   document.getElementById('closeCoverDialogBtn').addEventListener('click', () => closeDialog('coverDialog'));
-  document.getElementById('refreshLibraryBtn').addEventListener('click', () => loadBooks());
+  document.getElementById('refreshLibraryBtn').addEventListener('click', async () => {
+    const data = await apiJSON('/api/books/scan', { method: 'POST' });
+    if (data?.added > 0) snack(`Found ${data.added} new book${data.added === 1 ? '' : 's'}`);
+    loadBooks();
+  });
 
   // Close dialog on scrim click
   document.querySelectorAll('.dialog-scrim').forEach(scrim => {
@@ -1291,6 +1295,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // User menu
+  document.getElementById('uploadNavBtn')?.addEventListener('click', () => navigate('upload'));
+
   document.getElementById('userMenuBtn').addEventListener('click', e => {
     const menu = document.getElementById('userMenu');
     menu.style.display = menu.style.display === 'none' ? '' : 'none';

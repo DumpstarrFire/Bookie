@@ -165,6 +165,43 @@ def create_app():
         book = Book.query.get_or_404(book_id)
         return jsonify(book.to_dict())
 
+    @app.route("/api/books/scan", methods=["POST"])
+    @login_required
+    def scan_books():
+        """Walk BOOKS_DIR and register any files not already in the DB."""
+        known = {b.filename for b in Book.query.with_entities(Book.filename).all()}
+        added = 0
+        for path in BOOKS_DIR.rglob("*"):
+            if not path.is_file():
+                continue
+            ext = path.suffix.lstrip(".").lower()
+            if ext not in ALLOWED_EXTENSIONS:
+                continue
+            rel = str(path.relative_to(BOOKS_DIR))
+            if rel in known:
+                continue
+            book = Book(
+                filename=rel,
+                file_format=ext,
+                file_size=path.stat().st_size,
+                title=path.stem,
+            )
+            db.session.add(book)
+            db.session.flush()
+            cover_data = None
+            if ext == "epub":
+                cover_data = cover_mgr.extract_cover_from_epub(str(path))
+            elif ext == "pdf":
+                cover_data = cover_mgr.extract_cover_from_pdf(str(path))
+            if cover_data:
+                cf = cover_mgr.save_cover(book.id, cover_data)
+                if cf:
+                    book.cover_filename = cf
+            added += 1
+            known.add(rel)
+        db.session.commit()
+        return jsonify({"added": added})
+
     @app.route("/api/books/upload", methods=["POST"])
     @login_required
     def upload_book():

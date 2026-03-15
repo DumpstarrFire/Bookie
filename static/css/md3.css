@@ -247,7 +247,7 @@ body {
   align-items: center;
   gap: 4px;
   width: 100%;
-  padding: 8px 0;
+  padding: 14px 0;
   cursor: pointer;
   color: var(--md-sys-color-on-surface-variant);
   font-size: 11px;
@@ -271,6 +271,7 @@ body {
 }
 .nav-rail-item svg { width: 24px; height: 24px; fill: currentColor; }
 .nav-label { pointer-events: none; }
+.nav-rail:not(.expanded) .nav-label { display: none; }
 .nav-rail-item.active { color: var(--md-sys-color-on-secondary-container); }
 .nav-rail-item.active .indicator { background: var(--md-sys-color-secondary-container); }
 .nav-rail-item:hover .indicator { background: rgba(208,188,255,.08); }
@@ -1292,6 +1293,11 @@ textarea.field { resize: vertical; min-height: 80px; }
   /* Book detail dialog: stack cover + info vertically */
   .dialog-body [style*="display:flex;gap:20px"] { flex-direction: column !important; }
   .dialog-body [style*="display:flex;gap:20px"] > div:first-child { align-items: flex-start !important; flex-direction: row !important; gap: 12px !important; }
+
+  /* Book dialog footer: wrap buttons so they don't fall off screen */
+  .dialog-footer { flex-wrap: wrap; padding: 12px 16px; gap: 6px; overflow: visible; }
+  .dialog-footer > [style*="flex:1"] { display: none; }
+  .send-split-btn { flex-shrink: 0; }
 }
 
 /* ── Divider ───────────────────────────────────────────── */
