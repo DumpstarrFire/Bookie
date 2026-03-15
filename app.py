@@ -17,7 +17,7 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 
-from models import db, Book, Shelf, ShelfBook, Settings
+from models import db, Book, Shelf, ShelfBook, Settings, EmailAddress
 from auth import login_required, register_auth_routes
 import scraper
 import covers as cover_mgr
@@ -492,6 +492,73 @@ def create_app():
         return jsonify([sb.book.to_dict() for sb in sbs])
 
     # -----------------------------------------------------------------------
+    # Email Addresses
+    # -----------------------------------------------------------------------
+
+    @app.route("/api/email-addresses", methods=["GET"])
+    @login_required
+    def list_email_addresses():
+        addresses = EmailAddress.query.order_by(EmailAddress.is_default.desc(), EmailAddress.label).all()
+        return jsonify([a.to_dict() for a in addresses])
+
+    @app.route("/api/email-addresses", methods=["POST"])
+    @login_required
+    def create_email_address():
+        data = request.get_json(force=True) or {}
+        email = (data.get("email") or "").strip().lower()
+        label = (data.get("label") or "").strip()
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        if not label:
+            label = email
+        make_default = data.get("is_default", False)
+        if make_default:
+            EmailAddress.query.filter_by(is_default=True).update({"is_default": False})
+        addr = EmailAddress(label=label, email=email, is_default=bool(make_default))
+        db.session.add(addr)
+        db.session.commit()
+        return jsonify(addr.to_dict()), 201
+
+    @app.route("/api/email-addresses/<int:addr_id>", methods=["PUT"])
+    @login_required
+    def update_email_address(addr_id):
+        addr = EmailAddress.query.get_or_404(addr_id)
+        data = request.get_json(force=True) or {}
+        if "label" in data:
+            addr.label = (data["label"] or "").strip() or addr.email
+        if "email" in data:
+            addr.email = (data["email"] or "").strip().lower()
+        if data.get("is_default"):
+            EmailAddress.query.filter(EmailAddress.id != addr_id).update({"is_default": False})
+            addr.is_default = True
+        db.session.commit()
+        return jsonify(addr.to_dict())
+
+    @app.route("/api/email-addresses/<int:addr_id>", methods=["DELETE"])
+    @login_required
+    def delete_email_address(addr_id):
+        addr = EmailAddress.query.get_or_404(addr_id)
+        was_default = addr.is_default
+        db.session.delete(addr)
+        db.session.commit()
+        # Promote oldest remaining address to default if we deleted the default
+        if was_default:
+            first = EmailAddress.query.order_by(EmailAddress.date_added).first()
+            if first:
+                first.is_default = True
+                db.session.commit()
+        return jsonify({"success": True})
+
+    @app.route("/api/email-addresses/<int:addr_id>/set-default", methods=["POST"])
+    @login_required
+    def set_default_email(addr_id):
+        EmailAddress.query.filter_by(is_default=True).update({"is_default": False})
+        addr = EmailAddress.query.get_or_404(addr_id)
+        addr.is_default = True
+        db.session.commit()
+        return jsonify(addr.to_dict())
+
+    # -----------------------------------------------------------------------
     # Send via SMTP / Kindle
     # -----------------------------------------------------------------------
 
@@ -501,9 +568,13 @@ def create_app():
         book = Book.query.get_or_404(book_id)
         data = request.get_json(force=True) or {}
 
-        recipient = data.get("recipient") or Settings.get("kindle_email")
+        # Resolve recipient: explicit > EmailAddress table default > legacy Settings key
+        recipient = data.get("recipient")
         if not recipient:
-            return jsonify({"error": "Recipient email required"}), 400
+            default_addr = EmailAddress.query.filter_by(is_default=True).first()
+            recipient = default_addr.email if default_addr else Settings.get("kindle_email")
+        if not recipient:
+            return jsonify({"error": "No recipient email set. Add one in Settings → Account."}), 400
 
         smtp_host = data.get("smtp_host") or Settings.get("smtp_host")
         smtp_port = int(data.get("smtp_port") or Settings.get("smtp_port") or 587)

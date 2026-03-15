@@ -76,6 +76,7 @@ function navigate(view, opts = {}) {
     loadShelves();
   } else if (view === 'settings') {
     loadSettings();
+    loadEmailAddresses();
   }
 
   closeMenu();
@@ -146,7 +147,7 @@ function bookCard(b) {
       <div class="book-author">${esc(b.author || 'Unknown author')}</div>
     </div>
     <div class="book-actions" onclick="event.stopPropagation()">
-      <button class="icon-btn-sm" onclick="openSendDialog(${b.id})" title="Send to Kindle">
+      <button class="icon-btn-sm" onclick="handleCardSend(event,${b.id})" title="Send">
         <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
       </button>
       <button class="icon-btn-sm" onclick="openAddToShelf(${b.id})" title="Add to shelf">
@@ -172,7 +173,7 @@ function bookListItem(b) {
       <div class="book-list-meta">${esc(b.author || 'Unknown')} · ${(b.file_format||'').toUpperCase()}${shelves}</div>
     </div>
     <div class="book-list-actions" onclick="event.stopPropagation()">
-      <button class="icon-btn" onclick="openSendDialog(${b.id})" title="Send">
+      <button class="icon-btn" onclick="handleCardSend(event,${b.id})" title="Send">
         <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
       </button>
       <a class="icon-btn" href="/api/books/${b.id}/download" title="Download">
@@ -280,7 +281,15 @@ async function openBook(id) {
     <div style="flex:1"></div>
     <button class="btn btn-outlined" onclick="openMetaSearch(${id})">Find Metadata</button>
     <button class="btn btn-tonal" onclick="openAddToShelf(${id})">Add to Shelf</button>
-    <button class="btn btn-tonal" onclick="openSendDialog(${id})">Send to Kindle</button>
+    <div class="send-split-btn" id="bookDetailSendBtn">
+      <button class="send-main" onclick="sendToDefault(${id})">
+        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
+        Send
+      </button>
+      <button class="send-arrow" onclick="openSendPicker(${id}, this)" title="Choose address">
+        <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+      </button>
+    </div>
     <a class="btn btn-outlined" href="/api/books/${id}/download">Download</a>
     <button class="btn btn-filled" onclick="saveBook(${id})">Save</button>`;
 
@@ -461,12 +470,118 @@ async function confirmAddToShelf() {
   closeDialog('addToShelfDialog');
 }
 
-// ── Send Dialog ──────────────────────────────────────────
-async function openSendDialog(bookId) {
+// ── Send ─────────────────────────────────────────────────
+// Send immediately to the default address (called from split-btn left side)
+async function sendToDefault(bookId) {
+  const addresses = await apiJSON('/api/email-addresses');
+  const def = addresses.find(a => a.is_default);
+  if (!def) {
+    // No default set — fall through to picker
+    openSendPicker(bookId, null);
+    return;
+  }
+  await executeSend(bookId, def.email, def.label);
+}
+
+// Small handler for card/list icon buttons — send to default or open picker
+async function handleCardSend(event, bookId) {
+  event.stopPropagation();
+  sendToDefault(bookId);
+}
+
+// Open the address picker dropdown anchored to `anchorEl` (or dialog if null)
+async function openSendPicker(bookId, anchorEl) {
+  closeSendPicker();
   state.sendBookId = bookId;
-  const settings = await apiJSON('/api/settings');
-  document.getElementById('sendRecipient').value = settings.kindle_email || '';
-  document.getElementById('sendResult').textContent = '';
+  const addresses = await apiJSON('/api/email-addresses');
+
+  const picker = document.createElement('div');
+  picker.className = 'send-picker';
+  picker.id = 'sendPickerPopup';
+
+  if (addresses.length) {
+    picker.innerHTML = `
+      <div class="send-picker-header">Send to…</div>
+      ${addresses.map(a => `
+        <button class="send-picker-item" onclick="pickAndSend(${bookId},'${esc(a.email)}','${esc(a.label)}')">
+          <div class="send-picker-item-info">
+            <div class="send-picker-item-label">${esc(a.label)}</div>
+            <div class="send-picker-item-email">${esc(a.email)}</div>
+          </div>
+          ${a.is_default ? '<span class="send-picker-item-default">Default</span>' : ''}
+        </button>`).join('')}
+      <hr class="send-picker-divider">
+      <button class="send-picker-add" onclick="closeSendPicker();openSendDialog(${bookId})">
+        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
+        Enter a different address…
+      </button>`;
+  } else {
+    picker.innerHTML = `
+      <div style="padding:16px;font-size:14px;color:var(--md-sys-color-on-surface-variant)">No saved addresses yet.</div>
+      <button class="send-picker-add" onclick="closeSendPicker();openSendDialog(${bookId})">
+        <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+        Enter address manually…
+      </button>`;
+  }
+
+  document.body.appendChild(picker);
+
+  // Position relative to anchor button or centre of screen
+  if (anchorEl) {
+    const rect = anchorEl.getBoundingClientRect();
+    const pw = 260;
+    let left = rect.right - pw;
+    if (left < 8) left = 8;
+    let top = rect.bottom + 6;
+    if (top + 300 > window.innerHeight) top = rect.top - picker.offsetHeight - 6;
+    picker.style.left = left + 'px';
+    picker.style.top = top + 'px';
+  } else {
+    picker.style.left = '50%';
+    picker.style.top = '50%';
+    picker.style.transform = 'translate(-50%,-50%)';
+  }
+
+  // Close on outside click
+  setTimeout(() => document.addEventListener('click', closeSendPicker, { once: true }), 10);
+}
+
+function closeSendPicker() {
+  document.getElementById('sendPickerPopup')?.remove();
+}
+
+async function pickAndSend(bookId, email, label) {
+  closeSendPicker();
+  await executeSend(bookId, email, label);
+}
+
+async function executeSend(bookId, recipient, label) {
+  const book = state.books.find(b => b.id === bookId) || state.selectedBook;
+  const title = book?.title || `Book #${bookId}`;
+  snack(`Sending "${title}" to ${label || recipient}…`, 6000);
+  const res = await api(`/api/books/${bookId}/send`, {
+    method: 'POST', body: JSON.stringify({ recipient }),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    snack(data.message || `Sent to ${recipient}`);
+  } else {
+    snack(`Send failed: ${data.error || 'Unknown error'}`, 5000);
+  }
+}
+
+// Manual address dialog (fallback when no addresses saved, or "Enter different")
+function openSendDialog(bookId) {
+  state.sendBookId = bookId;
+  const book = state.books.find(b => b.id === bookId) || state.selectedBook;
+  document.getElementById('sendDialogTitle').textContent =
+    `Send "${book?.title || 'Book'}"`;
+  document.getElementById('sendDialogBody').innerHTML = `
+    <div class="form-field">
+      <label>Recipient Email</label>
+      <input class="field" id="sendRecipient" type="email" placeholder="yourname@kindle.com" autofocus>
+    </div>
+    <div id="sendResult" style="font-size:14px;margin-top:4px"></div>`;
   openDialog('sendDialog');
 }
 
@@ -488,6 +603,97 @@ async function confirmSend() {
     document.getElementById('sendResult').style.color = 'var(--md-sys-color-error)';
     document.getElementById('sendResult').textContent = data.error || 'Send failed';
   }
+}
+
+// ── Email Address Management ──────────────────────────────
+let _emailAddrEditId = null;
+
+async function loadEmailAddresses() {
+  const addresses = await apiJSON('/api/email-addresses');
+  const el = document.getElementById('emailAddressList');
+  if (!el) return;
+  if (!addresses.length) {
+    el.innerHTML = `<p style="color:var(--md-sys-color-on-surface-variant);font-size:14px;padding:8px 0">
+      No email addresses saved yet. Add your Kindle address to get started.</p>`;
+    return;
+  }
+  el.innerHTML = addresses.map(a => `
+    <div class="email-addr-row">
+      <div class="email-addr-info">
+        <div class="email-addr-label">${esc(a.label)}</div>
+        <div class="email-addr-email">${esc(a.email)}</div>
+      </div>
+      ${a.is_default ? '<span class="email-addr-default-badge">Default</span>' : `<button class="btn btn-text" style="font-size:12px;padding:6px 10px" onclick="setDefaultEmail(${a.id})">Set default</button>`}
+      <button class="icon-btn" onclick="editEmailAddr(${a.id})" title="Edit">
+        <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      </button>
+      <button class="icon-btn" style="color:var(--md-sys-color-error)" onclick="deleteEmailAddr(${a.id})" title="Delete">
+        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+      </button>
+    </div>`).join('');
+}
+
+function openAddEmailAddr() {
+  _emailAddrEditId = null;
+  document.getElementById('emailAddrDialogTitle').textContent = 'Add Email Address';
+  document.getElementById('emailAddrLabel').value = '';
+  document.getElementById('emailAddrEmail').value = '';
+  document.getElementById('emailAddrDefault').checked = false;
+  document.getElementById('emailAddrResult').textContent = '';
+  openDialog('emailAddrDialog');
+}
+
+function editEmailAddr(id) {
+  const list = document.querySelectorAll('.email-addr-row');
+  // Fetch from API to get current values
+  apiJSON(`/api/email-addresses`).then(addresses => {
+    const a = addresses.find(x => x.id === id);
+    if (!a) return;
+    _emailAddrEditId = id;
+    document.getElementById('emailAddrDialogTitle').textContent = 'Edit Email Address';
+    document.getElementById('emailAddrLabel').value = a.label;
+    document.getElementById('emailAddrEmail').value = a.email;
+    document.getElementById('emailAddrDefault').checked = a.is_default;
+    document.getElementById('emailAddrResult').textContent = '';
+    openDialog('emailAddrDialog');
+  });
+}
+
+async function saveEmailAddr() {
+  const label = v('emailAddrLabel').trim();
+  const email = v('emailAddrEmail').trim();
+  const is_default = document.getElementById('emailAddrDefault').checked;
+  const resultEl = document.getElementById('emailAddrResult');
+  if (!email) { resultEl.style.color='var(--md-sys-color-error)'; resultEl.textContent='Email is required'; return; }
+
+  let res;
+  if (_emailAddrEditId) {
+    res = await api(`/api/email-addresses/${_emailAddrEditId}`, {
+      method: 'PUT', body: JSON.stringify({ label, email, is_default }),
+    });
+  } else {
+    res = await api('/api/email-addresses', {
+      method: 'POST', body: JSON.stringify({ label, email, is_default }),
+    });
+  }
+  const data = await res.json();
+  if (!res.ok) { resultEl.style.color='var(--md-sys-color-error)'; resultEl.textContent=data.error||'Error'; return; }
+  snack(_emailAddrEditId ? 'Address updated' : 'Address saved');
+  closeDialog('emailAddrDialog');
+  loadEmailAddresses();
+}
+
+async function deleteEmailAddr(id) {
+  if (!confirm('Remove this email address?')) return;
+  await api(`/api/email-addresses/${id}`, { method: 'DELETE' });
+  snack('Address removed');
+  loadEmailAddresses();
+}
+
+async function setDefaultEmail(id) {
+  await api(`/api/email-addresses/${id}/set-default`, { method: 'POST' });
+  snack('Default address updated');
+  loadEmailAddresses();
 }
 
 // ── Cover Dialog ─────────────────────────────────────────
@@ -591,7 +797,6 @@ async function loadSettings() {
   setVal('smtpUser', data.smtp_user || '');
   setVal('smtpPassword', data.smtp_password || '');
   setVal('smtpSender', data.smtp_sender || '');
-  setVal('kindleEmail', data.kindle_email || '');
   document.getElementById('smtpTls').checked = (data.smtp_tls || 'true') === 'true';
   document.getElementById('autoMetadata').checked = (data.auto_metadata || 'false') === 'true';
   setVal('defaultMetaSource', data.default_metadata_source || 'google_books');
@@ -604,7 +809,7 @@ async function saveSmtp() {
   const body = {
     smtp_host: v('smtpHost'), smtp_port: v('smtpPort'), smtp_user: v('smtpUser'),
     smtp_password: v('smtpPassword'), smtp_sender: v('smtpSender'),
-    kindle_email: v('kindleEmail'), smtp_tls: document.getElementById('smtpTls').checked ? 'true' : 'false',
+    smtp_tls: document.getElementById('smtpTls').checked ? 'true' : 'false',
   };
   await api('/api/settings', { method: 'PUT', body: JSON.stringify(body) });
   snack('SMTP settings saved!');
@@ -750,6 +955,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeMetaDialogBtn').addEventListener('click', () => closeDialog('metaDialog'));
   document.getElementById('closeSendDialog').addEventListener('click', () => closeDialog('sendDialog'));
   document.getElementById('closeSendDialogBtn').addEventListener('click', () => closeDialog('sendDialog'));
+  document.getElementById('closeEmailAddrDialog').addEventListener('click', () => closeDialog('emailAddrDialog'));
+  document.getElementById('closeEmailAddrDialogBtn').addEventListener('click', () => closeDialog('emailAddrDialog'));
   document.getElementById('closeShelfDialog').addEventListener('click', () => closeDialog('shelfDialog'));
   document.getElementById('closeShelfDialogBtn').addEventListener('click', () => closeDialog('shelfDialog'));
   document.getElementById('closeAddToShelf').addEventListener('click', () => closeDialog('addToShelfDialog'));
@@ -767,8 +974,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('metaQuery').addEventListener('keydown', e => { if (e.key === 'Enter') searchMeta(); });
   document.getElementById('applyMetaBtn').addEventListener('click', applyMeta);
 
-  // Send dialog
+  // Send dialog (manual address entry fallback)
   document.getElementById('confirmSendBtn').addEventListener('click', confirmSend);
+
+  // Email address management
+  document.getElementById('addEmailBtn')?.addEventListener('click', openAddEmailAddr);
+  document.getElementById('saveEmailAddrBtn').addEventListener('click', saveEmailAddr);
 
   // Shelf dialog
   document.getElementById('newShelfBtn').addEventListener('click', openNewShelf);

@@ -225,7 +225,6 @@
               </div>
               <div class="form-row">
                 <div class="form-field"><label>Sender Email (optional)</label><input class="field" id="smtpSender" type="email" placeholder="Same as username"></div>
-                <div class="form-field"><label>Default Kindle Email</label><input class="field" id="kindleEmail" type="email" placeholder="yourname@kindle.com"></div>
               </div>
               <div class="switch-field">
                 <div>
@@ -315,6 +314,23 @@
 
           <!-- Account Tab -->
           <div id="tabAccount" class="tab-panel">
+
+            <!-- Email addresses -->
+            <div class="card" style="margin-bottom:16px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+                <div>
+                  <h3 style="font-size:16px;font-weight:500">Send-to Email Addresses</h3>
+                  <p style="font-size:13px;color:var(--md-sys-color-on-surface-variant);margin-top:2px">Saved recipients for Send to Kindle and other email delivery</p>
+                </div>
+                <button class="btn btn-tonal" id="addEmailBtn">
+                  <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+                  Add
+                </button>
+              </div>
+              <div id="emailAddressList"></div>
+            </div>
+
+            <!-- Change password -->
             <div class="card">
               <h3 style="font-size:16px;font-weight:500;margin-bottom:20px">Change Password</h3>
               <div class="form-field"><label>Current Password</label><input class="field" id="currentPwd" type="password"></div>
@@ -407,23 +423,55 @@
   </div>
 </div>
 
-<!-- Send to Kindle Dialog -->
+<!-- Send Dialog -->
 <div class="dialog-scrim" id="sendDialog">
   <div class="dialog">
     <div class="dialog-header">
-      <span class="dialog-title">Send to Kindle</span>
+      <span class="dialog-title" id="sendDialogTitle">Send</span>
       <button class="icon-btn" id="closeSendDialog"><svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
     </div>
-    <div class="dialog-body">
-      <div class="form-field">
-        <label>Recipient Email</label>
-        <input class="field" id="sendRecipient" type="email" placeholder="yourname@kindle.com">
-      </div>
-      <div id="sendResult" style="font-size:14px;margin-top:4px"></div>
+    <div class="dialog-body" id="sendDialogBody">
+      <!-- Populated by JS -->
     </div>
     <div class="dialog-footer">
       <button class="btn btn-text" id="closeSendDialogBtn">Cancel</button>
       <button class="btn btn-filled" id="confirmSendBtn">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Email Address Dialog -->
+<div class="dialog-scrim" id="emailAddrDialog">
+  <div class="dialog">
+    <div class="dialog-header">
+      <span class="dialog-title" id="emailAddrDialogTitle">Add Email Address</span>
+      <button class="icon-btn" id="closeEmailAddrDialog"><svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+    </div>
+    <div class="dialog-body">
+      <div class="form-field">
+        <label>Label</label>
+        <input class="field" id="emailAddrLabel" type="text" placeholder="e.g. My Kindle, Work Tablet">
+      </div>
+      <div class="form-field">
+        <label>Email Address</label>
+        <input class="field" id="emailAddrEmail" type="email" placeholder="yourname@kindle.com">
+      </div>
+      <div class="switch-field">
+        <div>
+          <div class="switch-label">Set as default</div>
+          <div class="switch-sub">This address will be used when clicking Send directly</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="emailAddrDefault">
+          <span class="switch-track"></span>
+          <span class="switch-thumb"></span>
+        </label>
+      </div>
+      <div id="emailAddrResult" style="font-size:14px;margin-top:4px"></div>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn btn-text" id="closeEmailAddrDialogBtn">Cancel</button>
+      <button class="btn btn-filled" id="saveEmailAddrBtn">Save</button>
     </div>
   </div>
 </div>

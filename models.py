@@ -101,6 +101,24 @@ class ShelfBook(db.Model):
     __table_args__ = (db.UniqueConstraint("shelf_id", "book_id"),)
 
 
+class EmailAddress(db.Model):
+    __tablename__ = "email_addresses"
+
+    id = db.Column(db.Integer, primary_key=True)
+    label = db.Column(db.String(128), nullable=False)   # e.g. "Kindle", "Work Kindle"
+    email = db.Column(db.String(256), nullable=False)
+    is_default = db.Column(db.Boolean, default=False, nullable=False)
+    date_added = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "label": self.label,
+            "email": self.email,
+            "is_default": self.is_default,
+        }
+
+
 class Settings(db.Model):
     __tablename__ = "settings"
 
