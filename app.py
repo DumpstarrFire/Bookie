@@ -213,15 +213,9 @@ MAX_UPLOAD_MB = 35
 
 
 def create_app():
-    # Migrate old database name if present
-    _old_db = DATA_DIR / "booker.db"
-    _new_db = DATA_DIR / "bookie.db"
-    if _old_db.exists() and not _new_db.exists():
-        _old_db.rename(_new_db)
-
     app = Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-        "DATABASE_URL", f"sqlite:///{_new_db.absolute()}"
+        "DATABASE_URL", f"sqlite:///{(DATA_DIR / 'booker.db').absolute()}"
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024

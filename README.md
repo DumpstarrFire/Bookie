@@ -64,7 +64,7 @@ Everything Bookie needs persists under `/app/data`:
 data/
   books/        - uploaded book files
   covers/       - extracted and saved cover images
-  bookie.db     - SQLite database
+  booker.db     - SQLite database
   secret_key    - session signing key
 ```
 
