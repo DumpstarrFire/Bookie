@@ -4,6 +4,31 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
+class Tag(db.Model):
+    __tablename__ = "tags"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False, unique=True)
+
+    book_tags = db.relationship("BookTag", back_populates="tag", cascade="all, delete-orphan")
+
+    def to_dict(self):
+        return {"id": self.id, "name": self.name}
+
+
+class BookTag(db.Model):
+    __tablename__ = "book_tags"
+
+    id = db.Column(db.Integer, primary_key=True)
+    book_id = db.Column(db.Integer, db.ForeignKey("books.id"), nullable=False)
+    tag_id = db.Column(db.Integer, db.ForeignKey("tags.id"), nullable=False)
+
+    book = db.relationship("Book", back_populates="book_tags")
+    tag = db.relationship("Tag", back_populates="book_tags")
+
+    __table_args__ = (db.UniqueConstraint("book_id", "tag_id"),)
+
+
 class Book(db.Model):
     __tablename__ = "books"
 
@@ -22,7 +47,7 @@ class Book(db.Model):
     language = db.Column(db.String(16))
     description = db.Column(db.Text)
     page_count = db.Column(db.Integer)
-    categories = db.Column(db.String(512))  # comma-separated
+    categories = db.Column(db.String(512))  # kept in DB for backward compat
     rating = db.Column(db.Float)
     google_books_id = db.Column(db.String(64))
     goodreads_id = db.Column(db.String(64))
@@ -38,6 +63,7 @@ class Book(db.Model):
 
     # Relations
     shelf_books = db.relationship("ShelfBook", back_populates="book", cascade="all, delete-orphan")
+    book_tags = db.relationship("BookTag", back_populates="book", cascade="all, delete-orphan")
 
     def to_dict(self):
         return {
@@ -52,9 +78,7 @@ class Book(db.Model):
             "publisher": self.publisher,
             "published_date": self.published_date,
             "language": self.language,
-            "description": self.description,
             "page_count": self.page_count,
-            "categories": self.categories,
             "rating": self.rating,
             "google_books_id": self.google_books_id,
             "goodreads_id": self.goodreads_id,
@@ -63,7 +87,7 @@ class Book(db.Model):
             "series_order": self.series_order,
             "date_added": self.date_added.isoformat() if self.date_added else None,
             "date_modified": self.date_modified.isoformat() if self.date_modified else None,
-            "shelves": [sb.shelf.name for sb in self.shelf_books],
+            "tags": [bt.tag.name for bt in self.book_tags],
         }
 
 
@@ -115,7 +139,7 @@ class EmailAddress(db.Model):
     __tablename__ = "email_addresses"
 
     id = db.Column(db.Integer, primary_key=True)
-    label = db.Column(db.String(128), nullable=False)   # e.g. "Kindle", "Work Kindle"
+    label = db.Column(db.String(128), nullable=False)
     email = db.Column(db.String(256), nullable=False)
     is_default = db.Column(db.Boolean, default=False, nullable=False)
     date_added = db.Column(db.DateTime, default=datetime.utcnow)

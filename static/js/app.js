@@ -8,19 +8,21 @@
 const state = {
   view: 'library',
   books: [],
-  shelves: [],
   stats: null,
   page: 1,
   pages: 1,
   total: 0,
-  viewMode: 'grid',
-  filters: { q: '', format: '', sort: 'title', order: 'asc' },
-  activeShelf: null,   // { id, name } when browsing a shelf
+  viewMode: localStorage.getItem('viewMode') || 'grid',
+  filters: {
+    q: '',
+    format: '',
+    sort: localStorage.getItem('sortBy') || 'author',
+    order: localStorage.getItem('sortOrder') || 'asc',
+  },
+  activeTag: null,
   selectedBook: null,
   selectedMeta: null,
   sendBookId: null,
-  shelfEditId: null,
-  addToShelfBookId: null,
   coverBookId: null,
   coverFile: null,
   selectedCoverUrl: null,
@@ -148,35 +150,23 @@ function snack(msg, duration = 3500) {
 }
 
 // ── Navigation ───────────────────────────────────────────
-function navigate(view, opts = {}) {
+function navigate(view) {
   state.view = view;
-  state.activeShelf = opts.shelf || null;
-  // Keep URL hash in sync so page refresh restores the current view
-  // (settings view preserves sub-tab via activateSettingsTab; only set bare hash here)
   if (view !== 'settings') {
     history.replaceState(null, '', view === 'library' ? '/' : '#' + view);
   }
 
-  // Sync both nav rail and bottom nav
-  document.querySelectorAll('.nav-rail-item, .bottom-nav-item').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === view);
-  });
-
-  ['library', 'shelves', 'upload', 'settings'].forEach(v => {
+  ['library', 'upload', 'settings'].forEach(v => {
     document.getElementById(`view${cap(v)}`).style.display = v === view ? '' : 'none';
   });
-
-  // (FAB removed)
 
   if (view === 'library') {
     state.page = 1;
     loadBooks();
-  } else if (view === 'shelves') {
-    loadShelves();
+    loadTagFilterRow();
   } else if (view === 'settings') {
     loadSettings();
     loadEmailAddresses();
-    // Restore active sub-tab from URL hash (e.g. #settings/smtp)
     const subTab = location.hash.replace('#settings/', '').replace('#settings', '');
     activateSettingsTab(SETTINGS_TABS.includes(subTab) ? subTab : 'smtp');
   }
@@ -202,17 +192,18 @@ function activateSettingsTab(target) {
 }
 
 function clearFilters() {
-  state.filters = { q: '', format: '', sort: 'title', order: 'asc' };
-  state.activeShelf = null;
+  state.filters = { q: '', format: '', sort: 'author', order: 'asc' };
+  state.activeTag = null;
   state.page = 1;
   const searchEl = document.getElementById('searchInput');
   if (searchEl) searchEl.value = '';
   const formatEl = document.getElementById('formatSelect');
   if (formatEl) formatEl.value = '';
   const sortEl = document.getElementById('sortSelect');
-  if (sortEl) sortEl.value = 'title';
+  if (sortEl) sortEl.value = 'author';
   const orderBtn = document.getElementById('orderToggle');
   if (orderBtn) orderBtn.textContent = '↑ Asc';
+  loadTagFilterRow();
   loadBooks();
   navigate('library');
 }
@@ -230,12 +221,12 @@ async function loadBooks() {
   });
   if (state.filters.q) params.set('q', state.filters.q);
   if (state.filters.format) params.set('format', state.filters.format);
-  if (state.activeShelf) params.set('shelf_id', state.activeShelf.id);
+  if (state.activeTag) params.set('tag', state.activeTag);
 
   // Show/hide clear filters button
   const _cfBtn = document.getElementById('clearFiltersBtn');
   if (_cfBtn) {
-    const hasFilter = state.filters.q || state.filters.format || state.activeShelf;
+    const hasFilter = state.filters.q || state.filters.format || state.activeTag;
     _cfBtn.style.display = hasFilter ? '' : 'none';
   }
 
@@ -275,10 +266,12 @@ function bookCard(b) {
   const cover = b.cover_filename
     ? `<img class="book-cover" src="/api/books/${b.id}/cover?thumb=true" alt="${esc(b.title)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="book-cover-placeholder" style="display:none">${svgBook()}</div>`
     : `<div class="book-cover-placeholder">${svgBook()}</div>`;
+  const seriesLabel = b.series ? esc(b.series) + (b.series_order != null ? ' #' + b.series_order : '') : '';
+  const seriesBadge = seriesLabel ? `<span class="book-series-badge">${seriesLabel}</span>` : '';
   return `
   <div class="book-card" onclick="openBook(${b.id})">
     ${cover}
-    <span class="book-format-badge">${esc(b.file_format || '?')}</span>
+    ${seriesBadge}
     <div class="book-info">
       <div class="book-info-text">
         <div class="book-title">${esc(b.title || 'Untitled')}</div>
@@ -297,13 +290,13 @@ function bookListItem(b) {
   const thumb = b.cover_filename
     ? `<img class="book-list-thumb" src="/api/books/${b.id}/cover?thumb=true" alt="" loading="lazy" onerror="this.src=''">`
     : `<div class="book-list-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--md-sys-color-surface-container-highest)">${svgBook(24)}</div>`;
-  const shelves = b.shelves && b.shelves.length ? ` · ${b.shelves.join(', ')}` : '';
+  const seriesMeta = b.series ? ` · ${esc(b.series)}${b.series_order != null ? ' #' + b.series_order : ''}` : '';
   return `
   <div class="book-list-item" onclick="openBook(${b.id})">
     ${thumb}
     <div class="book-list-info">
       <div class="book-list-title">${esc(b.title || 'Untitled')}</div>
-      <div class="book-list-meta">${esc(b.author || 'Unknown')} · ${(b.file_format||'').toUpperCase()}${shelves}</div>
+      <div class="book-list-meta">${esc(b.author || 'Unknown')}${seriesMeta}</div>
     </div>
     <div class="book-list-actions" onclick="event.stopPropagation()">
       <button class="icon-btn" onclick="openCardMenu(event,${b.id})" title="More options">
@@ -354,7 +347,6 @@ async function loadStats() {
   const mb = (data.total_size_bytes / 1024 / 1024).toFixed(1);
   el.innerHTML = `<div class="stats-grid">
     <div class="stat-card"><div class="stat-value">${data.total_books}</div><div class="stat-label">Total Books</div></div>
-    <div class="stat-card"><div class="stat-value">${data.total_shelves}</div><div class="stat-label">Shelves</div></div>
     <div class="stat-card"><div class="stat-value">${mb} MB</div><div class="stat-label">Library Size</div></div>
     ${fmts}
   </div>`;
@@ -390,8 +382,6 @@ function exportLogs() {
 async function openBook(id) {
   const book = await apiJSON(`/api/books/${id}`);
   state.selectedBook = book;
-  const shelves = await apiJSON('/api/shelves');
-  state.shelves = shelves;
 
   document.getElementById('bookDialogTitle').textContent = book.title || 'Book Details';
 
@@ -399,7 +389,9 @@ async function openBook(id) {
     ? `<img src="/api/books/${id}/cover?t=${Date.now()}" alt="cover" style="width:180px;height:270px;object-fit:cover;border-radius:8px;flex-shrink:0">`
     : `<div style="width:180px;height:270px;background:var(--md-sys-color-surface-container-highest);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${svgBook(56)}</div>`;
 
-  const shelfPills = (book.shelves || []).map(s => `<span class="shelf-pill">${esc(s)}</span>`).join('');
+  const tagChips = (book.tags || []).map(t =>
+    `<span class="tag-chip">${esc(t)}<button class="tag-chip-remove" onclick="removeTagByName(${id},'${esc(t)}')" title="Remove tag">×</button></span>`
+  ).join('');
 
   const _dialogBodyEl = document.getElementById('bookDialogBody');
   _dialogBodyEl.innerHTML = `
@@ -409,56 +401,64 @@ async function openBook(id) {
       <button class="btn btn-text" style="font-size:12px;padding:4px 8px" onclick="openCoverDialog(${id})">Change Cover</button>
     </div>
     <div style="flex:1;min-width:200px">
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">${shelfPills || '<span style="color:var(--md-sys-color-on-surface-variant);font-size:13px">No shelves</span>'}</div>
       <div class="form-row">
         <div class="form-field"><label>Title</label><input class="field" id="bTitle" value="${esc(book.title||'')}"></div>
         <div class="form-field"><label>Author</label><input class="field" id="bAuthor" value="${esc(book.author||'')}"></div>
       </div>
       <div class="form-row">
-        <div class="form-field"><label>ISBN-10</label><input class="field" id="bIsbn" value="${esc(book.isbn||'')}"></div>
-        <div class="form-field"><label>ISBN-13</label><input class="field" id="bIsbn13" value="${esc(book.isbn13||'')}"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-field"><label>Publisher</label><input class="field" id="bPublisher" value="${esc(book.publisher||'')}"></div>
         <div class="form-field"><label>Published</label><input class="field" id="bPubDate" value="${esc(book.published_date||'')}"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-field"><label>Language</label><input class="field" id="bLanguage" value="${esc(book.language||'')}"></div>
         <div class="form-field"><label>Pages</label><input class="field" id="bPages" type="number" value="${book.page_count||''}"></div>
       </div>
       <div class="form-row">
         <div class="form-field"><label>Series</label><input class="field" id="bSeries" value="${esc(book.series||'')}"></div>
         <div class="form-field"><label>Series #</label><input class="field" id="bSeriesOrder" type="number" step="0.1" value="${book.series_order??''}"></div>
       </div>
-      <div class="form-field"><label>Categories</label><input class="field" id="bCategories" value="${esc(book.categories||'')}"></div>
-      <div class="form-field"><label>Description</label><textarea class="field" id="bDescription" rows="4">${esc(book.description||'')}</textarea></div>
+      <div class="form-field">
+        <label>Tags</label>
+        <div class="tag-input-row">
+          <div class="tag-chips-wrap" id="bookTagChips">${tagChips}</div>
+          <input class="field tag-add-input" id="bTagInput" type="text" placeholder="Add tag…" autocomplete="off">
+        </div>
+      </div>
     </div>
   </div>
   <div style="padding:4px 0 16px;font-size:12px;color:var(--md-sys-color-on-surface-variant)">
     File: ${esc(book.filename)} · ${formatBytes(book.file_size)} · Added ${fmtDate(book.date_added)}
   </div>`;
 
+  // Tag input: add tag on Enter or comma
+  const tagInput = document.getElementById('bTagInput');
+  tagInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const name = tagInput.value.trim().replace(/,/g, '');
+      if (name) { addTagToBook(id, name); tagInput.value = ''; }
+    }
+  });
+
   document.getElementById('bookDialogFooter').innerHTML = `
     <button class="btn btn-text" style="color:var(--md-sys-color-error)" onclick="deleteBook(${id})">Delete</button>
     <div style="flex:1"></div>
     <button class="btn btn-outlined" onclick="openMetaSearch(${id})">Find Metadata</button>
-    <button class="btn btn-tonal" onclick="openAddToShelf(${id})">Add to Shelf</button>
     <button class="btn btn-filled" onclick="saveBook(${id})">Save</button>`;
 
   openDialog('bookDialog');
-  // Always scroll to top when opening a new book
   document.getElementById('bookDialogBody').scrollTop = 0;
 }
 
 async function saveBook(id) {
   const data = {
-    title: v('bTitle'), author: v('bAuthor'), isbn: v('bIsbn'), isbn13: v('bIsbn13'),
-    publisher: v('bPublisher'), published_date: v('bPubDate'),
-    language: v('bLanguage'), page_count: parseInt(v('bPages')) || null,
-    categories: v('bCategories'), description: v('bDescription'),
+    title: v('bTitle'), author: v('bAuthor'),
+    published_date: v('bPubDate'),
+    page_count: parseInt(v('bPages')) || null,
     series: v('bSeries') || null,
     series_order: parseFloat(v('bSeriesOrder')) || null,
   };
+  // Add pending tag from input if any
+  const tagInput = document.getElementById('bTagInput');
+  if (tagInput && tagInput.value.trim()) {
+    await addTagToBook(id, tagInput.value.trim());
+  }
   await api(`/api/books/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   snack('Saved!');
   closeDialog('bookDialog');
@@ -560,171 +560,61 @@ async function selectMeta(i) {
   loadBooks();
 }
 
-// ── Shelves ──────────────────────────────────────────────
-async function loadShelves() {
-  const data = await apiJSON('/api/shelves');
-  state.shelves = data;
-  const grid = document.getElementById('shelvesGrid');
-  if (!data.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-      <svg viewBox="0 0 24 24"><path d="M2 4v16h20V4H2zm2 2h16v4H4V6zm0 6h4v6H4v-6zm6 6v-6h4v6h-4zm6 0v-6h4v6h-4z"/></svg>
-      <h2>No shelves yet</h2>
-      <p>Create a shelf to organize your books</p></div>`;
-    return;
+// ── Tags ─────────────────────────────────────────────────
+async function loadTagFilterRow() {
+  const row = document.getElementById('tagFilterRow');
+  if (!row) return;
+  const tags = await apiJSON('/api/tags');
+  if (!tags.length) { row.innerHTML = ''; return; }
+  row.innerHTML = tags.map(t => `
+    <button class="tag-filter-chip${state.activeTag === t.name ? ' active' : ''}"
+      onclick="setTagFilter('${esc(t.name)}')">${esc(t.name)}</button>`).join('');
+}
+
+function setTagFilter(name) {
+  state.activeTag = state.activeTag === name ? null : name;
+  state.page = 1;
+  loadTagFilterRow();
+  loadBooks();
+}
+
+async function addTagToBook(bookId, name) {
+  const res = await api(`/api/books/${bookId}/tags`, {
+    method: 'POST', body: JSON.stringify({ name }),
+  });
+  if (!res.ok) return;
+  // Refresh tag chips in book dialog
+  const book = await apiJSON(`/api/books/${bookId}`);
+  state.selectedBook = book;
+  const chipsEl = document.getElementById('bookTagChips');
+  if (chipsEl) {
+    chipsEl.innerHTML = (book.tags || []).map(t =>
+      `<span class="tag-chip">${esc(t)}<button class="tag-chip-remove" onclick="removeTagByName(${bookId},'${esc(t)}')" title="Remove tag">×</button></span>`
+    ).join('');
   }
-  grid.innerHTML = data.map(s => `
-    <div class="shelf-card" onclick="browseShelf(${s.id},'${esc(s.name)}')">
-      <div class="shelf-card-accent" style="background:${s.color}"></div>
-      <div class="shelf-card-body">
-        <div class="shelf-card-top">
-          <div class="shelf-card-info">
-            <div class="shelf-card-name">${esc(s.name)}${s.is_smart ? ' <span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container);vertical-align:middle">⚡ Smart</span>' : ''}</div>
-            <div class="shelf-card-count">${s.book_count} book${s.book_count !== 1 ? 's' : ''}</div>
-            ${s.description ? `<div class="shelf-card-desc">${esc(s.description)}</div>` : ''}
-          </div>
-          <div class="shelf-card-actions" onclick="event.stopPropagation()">
-            <button class="icon-btn" onclick="editShelf(${s.id})" title="Edit">
-              <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-            </button>
-            <button class="icon-btn" style="color:var(--md-sys-color-error)" onclick="deleteShelf(${s.id})" title="Delete">
-              <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>`).join('');
+  loadTagFilterRow();
 }
 
-function browseShelf(id, name) {
-  navigate('library', { shelf: { id, name } });
-}
-
-const SMART_RULE_FIELDS = [
-  { value: 'author', label: 'Author' },
-  { value: 'title', label: 'Title' },
-  { value: 'categories', label: 'Categories' },
-  { value: 'publisher', label: 'Publisher' },
-  { value: 'language', label: 'Language' },
-  { value: 'file_format', label: 'Format' },
-  { value: 'published_date', label: 'Published Year' },
-  { value: 'rating', label: 'Rating' },
-];
-const SMART_RULE_OPS = [
-  { value: 'contains', label: 'contains' },
-  { value: 'equals', label: 'equals' },
-  { value: 'startswith', label: 'starts with' },
-  { value: 'before', label: 'before' },
-  { value: 'after', label: 'after' },
-  { value: 'gte', label: '≥' },
-  { value: 'lte', label: '≤' },
-];
-
-let _shelfRules = [];
-
-function renderShelfRules() {
-  const list = document.getElementById('shelfRulesList');
-  if (!list) return;
-  list.innerHTML = _shelfRules.map((r, i) => `
-    <div class="shelf-rule-row" style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-      <select class="field" style="flex:1;padding:4px 8px;font-size:13px" onchange="_shelfRules[${i}].field=this.value">
-        ${SMART_RULE_FIELDS.map(f => `<option value="${f.value}"${r.field===f.value?' selected':''}>${f.label}</option>`).join('')}
-      </select>
-      <select class="field" style="flex:1;padding:4px 8px;font-size:13px" onchange="_shelfRules[${i}].op=this.value">
-        ${SMART_RULE_OPS.map(o => `<option value="${o.value}"${r.op===o.value?' selected':''}>${o.label}</option>`).join('')}
-      </select>
-      <input class="field" style="flex:1.5;padding:4px 8px;font-size:13px" type="text" value="${esc(r.value)}" oninput="_shelfRules[${i}].value=this.value" placeholder="value">
-      <button class="icon-btn" onclick="_shelfRules.splice(${i},1);renderShelfRules()" title="Remove">
-        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-      </button>
-    </div>`).join('');
-}
-
-function openNewShelf() {
-  state.shelfEditId = null;
-  _shelfRules = [];
-  document.getElementById('shelfDialogTitle').textContent = 'New Shelf';
-  document.getElementById('shelfName').value = '';
-  document.getElementById('shelfDesc').value = '';
-  document.getElementById('shelfColor').value = '#D0BCFF';
-  document.getElementById('shelfIsSmart').checked = false;
-  document.getElementById('shelfCombination').value = 'all';
-  document.getElementById('shelfRulesPanel').style.display = 'none';
-  renderShelfRules();
-  openDialog('shelfDialog');
-}
-
-async function editShelf(id) {
-  const shelf = state.shelves.find(s => s.id === id);
-  if (!shelf) return;
-  state.shelfEditId = id;
-  _shelfRules = [];
-  try { _shelfRules = JSON.parse(shelf.rules || '[]'); } catch(e) {}
-  document.getElementById('shelfDialogTitle').textContent = 'Edit Shelf';
-  document.getElementById('shelfName').value = shelf.name;
-  document.getElementById('shelfDesc').value = shelf.description || '';
-  document.getElementById('shelfColor').value = shelf.color || '#D0BCFF';
-  document.getElementById('shelfIsSmart').checked = !!shelf.is_smart;
-  document.getElementById('shelfCombination').value = shelf.combination || 'all';
-  document.getElementById('shelfRulesPanel').style.display = shelf.is_smart ? '' : 'none';
-  renderShelfRules();
-  openDialog('shelfDialog');
-}
-
-async function saveShelf() {
-  const isSmart = document.getElementById('shelfIsSmart').checked;
-  const body = {
-    name: v('shelfName'), description: v('shelfDesc'), color: v('shelfColor'),
-    is_smart: isSmart,
-    rules: JSON.stringify(_shelfRules),
-    combination: v('shelfCombination') || 'all',
-  };
-  if (!body.name) { snack('Name is required'); return; }
-  if (state.shelfEditId) {
-    await api(`/api/shelves/${state.shelfEditId}`, { method: 'PUT', body: JSON.stringify(body) });
-    snack('Shelf updated');
-  } else {
-    const res = await api('/api/shelves', { method: 'POST', body: JSON.stringify(body) });
-    if (!res.ok) { const d = await res.json(); snack(d.error || 'Error'); return; }
-    snack('Shelf created');
+async function removeTagByName(bookId, name) {
+  const book = state.selectedBook;
+  if (!book) return;
+  // Find tag id from latest book data
+  const freshBook = await apiJSON(`/api/books/${bookId}`);
+  state.selectedBook = freshBook;
+  // Get all tags to find the id
+  const tags = await apiJSON('/api/tags');
+  const tag = tags.find(t => t.name === name);
+  if (!tag) return;
+  await api(`/api/books/${bookId}/tags/${tag.id}`, { method: 'DELETE' });
+  const chipsEl = document.getElementById('bookTagChips');
+  if (chipsEl) {
+    const updatedBook = await apiJSON(`/api/books/${bookId}`);
+    state.selectedBook = updatedBook;
+    chipsEl.innerHTML = (updatedBook.tags || []).map(t =>
+      `<span class="tag-chip">${esc(t)}<button class="tag-chip-remove" onclick="removeTagByName(${bookId},'${esc(t)}')" title="Remove tag">×</button></span>`
+    ).join('');
   }
-  closeDialog('shelfDialog');
-  loadShelves();
-}
-
-async function deleteShelf(id) {
-  if (!confirm('Delete this shelf? Books will not be deleted.')) return;
-  await api(`/api/shelves/${id}`, { method: 'DELETE' });
-  snack('Shelf deleted');
-  loadShelves();
-}
-
-async function openAddToShelf(bookId) {
-  state.addToShelfBookId = bookId;
-  openDialog('addToShelfDialog');
-  const body = document.getElementById('addToShelfBody');
-  body.innerHTML = '<p style="padding:16px 0;color:var(--md-sys-color-on-surface-variant)">Loading…</p>';
-  const shelves = await apiJSON('/api/shelves');
-  state.shelves = shelves;
-  if (!shelves.length) {
-    body.innerHTML = '<p style="padding:16px 0;color:var(--md-sys-color-on-surface-variant)">No shelves yet. Create one in the Shelves tab first.</p>';
-  } else {
-    body.innerHTML = shelves.map(s => `
-      <label style="display:flex;align-items:center;gap:12px;padding:12px;cursor:pointer;border-radius:8px" onmouseover="this.style.background='rgba(208,188,255,.08)'" onmouseout="this.style.background=''">
-        <input type="checkbox" value="${s.id}" style="width:18px;height:18px;accent-color:var(--md-sys-color-primary)">
-        <span style="color:var(--md-sys-color-on-surface)">${esc(s.name)}</span>
-        <span style="color:var(--md-sys-color-on-surface-variant);font-size:12px">${s.book_count} books</span>
-      </label>`).join('');
-  }
-}
-
-async function confirmAddToShelf() {
-  const checked = [...document.querySelectorAll('#addToShelfBody input[type=checkbox]:checked')].map(el => +el.value);
-  if (!checked.length) { snack('Select at least one shelf'); return; }
-  await Promise.all(checked.map(sid =>
-    api(`/api/shelves/${sid}/books`, { method: 'POST', body: JSON.stringify({ book_id: state.addToShelfBookId }) })
-  ));
-  snack('Added to shelf!');
-  closeDialog('addToShelfDialog');
+  loadTagFilterRow();
 }
 
 // ── Send ─────────────────────────────────────────────────
@@ -754,7 +644,7 @@ async function openSendPicker(bookId, anchorEl) {
     picker.innerHTML = `
       <div class="send-picker-header">Send to…</div>
       ${addresses.map(a => `
-        <button class="send-picker-item" onclick="pickAndSend(${bookId},'${esc(a.email)}','${esc(a.label)}')">
+        <button class="send-picker-item" onclick="event.stopPropagation();pickAndSend(${bookId},'${esc(a.email)}','${esc(a.label)}')">
           <div class="send-picker-item-info">
             <div class="send-picker-item-label">${esc(a.label)}</div>
             <div class="send-picker-item-email">${esc(a.email)}</div>
@@ -819,10 +709,6 @@ function openCardMenu(event, bookId) {
         <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
       </button>
     </div>
-    <button onclick="openAddToShelf(${bookId});closeCardMenu()">
-      <svg viewBox="0 0 24 24"><path d="M2 4v16h20V4H2zm2 2h16v4H4V6zm0 6h4v6H4v-6zm6 6v-6h4v6h-4zm6 0v-6h4v6h-4z"/></svg>
-      Add to Shelf
-    </button>
     <a href="/api/books/${bookId}/download" onclick="closeCardMenu()">
       <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
       Download
@@ -1387,6 +1273,65 @@ function closeSearchDropdown() {
   if (dropdown) dropdown.classList.remove('open');
 }
 
+// ── View Dropdown ─────────────────────────────────────────
+function openViewDropdown() {
+  closeViewDropdown();
+  const btn = document.getElementById('viewDropdownBtn');
+  const popup = document.createElement('div');
+  popup.id = 'viewDropdownPopup';
+  popup.className = 'view-dropdown-popup';
+
+  const GRID_SIZES = [{ label: 'Compact', size: 130 }, { label: 'Standard', size: 180 }, { label: 'Large', size: 240 }];
+  const savedSize = parseInt(localStorage.getItem('gridMin') || '180', 10);
+
+  popup.innerHTML = `
+    <div class="view-dropdown-section-label">Layout</div>
+    <button class="view-dropdown-item${state.viewMode === 'grid' ? ' active' : ''}" onclick="setViewMode('grid');renderViewDropdown()">
+      <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zm0 10h8v8H3zm10-10h8v8h-8zm0 10h8v8h-8z"/></svg> Grid
+    </button>
+    <button class="view-dropdown-item${state.viewMode === 'list' ? ' active' : ''}" onclick="setViewMode('list');renderViewDropdown()">
+      <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg> List
+    </button>
+    ${state.viewMode === 'grid' ? `
+    <hr style="border:none;border-top:1px solid var(--md-sys-color-outline-variant);margin:4px 0">
+    <div class="view-dropdown-section-label">Size</div>
+    ${GRID_SIZES.map(gs => `
+    <button class="view-dropdown-item${savedSize === gs.size ? ' active' : ''}" onclick="setGridSize(${gs.size});closeViewDropdown()">
+      ${gs.label}
+    </button>`).join('')}` : ''}`;
+
+  document.body.appendChild(popup);
+
+  const rect = btn.getBoundingClientRect();
+  let left = rect.right - 180;
+  if (left < 8) left = 8;
+  popup.style.left = left + 'px';
+  popup.style.top = (rect.bottom + 4) + 'px';
+
+  setTimeout(() => document.addEventListener('click', closeViewDropdown, { once: true }), 10);
+}
+
+function renderViewDropdown() {
+  // Re-render in place (for layout toggle)
+  const existing = document.getElementById('viewDropdownPopup');
+  if (existing) { existing.remove(); openViewDropdown(); }
+}
+
+function closeViewDropdown() {
+  document.getElementById('viewDropdownPopup')?.remove();
+}
+
+function setViewMode(mode) {
+  state.viewMode = mode;
+  localStorage.setItem('viewMode', mode);
+  renderBooks(document.getElementById('bookContainer'));
+}
+
+function setGridSize(size) {
+  document.documentElement.style.setProperty('--grid-min', size + 'px');
+  localStorage.setItem('gridMin', size);
+}
+
 // ── Dialog helpers ───────────────────────────────────────
 function openDialog(id) {
   document.getElementById(id).classList.add('open');
@@ -1412,81 +1357,15 @@ function closeMenu() { document.getElementById('userMenu').style.display = 'none
 // ── Event Listeners ──────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
 
-  // Nav rail + bottom nav (same data-view attribute)
-  document.querySelectorAll('.nav-rail-item, .bottom-nav-item').forEach(btn => {
-    btn.addEventListener('click', () => navigate(btn.dataset.view));
-  });
-
-  // Nav drawer – hamburger click = toggle pin (expand + lock, or collapse + unlock)
-  const navRail = document.getElementById('navRail');
-  const navToggle = document.getElementById('navToggle');
-  if (localStorage.getItem('navPinned') === '1') {
-    navRail.classList.add('no-transition', 'expanded', 'pinned');
-    requestAnimationFrame(() => navRail.classList.remove('no-transition'));
-  }
-  navToggle?.addEventListener('click', e => {
-    const pinned = navRail.classList.contains('pinned');
-    if (pinned) {
-      navRail.classList.remove('pinned', 'expanded');
-      localStorage.removeItem('navPinned');
-    } else {
-      navRail.classList.add('expanded', 'pinned');
-      localStorage.setItem('navPinned', '1');
-    }
-    e.stopPropagation();
-  });
-  document.addEventListener('click', e => {
-    if (!navRail.contains(e.target) && !navRail.classList.contains('pinned')) {
-      navRail.classList.remove('expanded');
-    }
-  });
-
-  // Hover to expand nav rail (without pinning) — delayed 2 s
-  let _navHoverTimer = null;
-  navRail.addEventListener('mouseenter', () => {
-    if (!navRail.classList.contains('pinned')) {
-      _navHoverTimer = setTimeout(() => {
-        if (!navRail.classList.contains('pinned')) navRail.classList.add('expanded');
-      }, 2000);
-    }
-  });
-  navRail.addEventListener('mouseleave', () => {
-    clearTimeout(_navHoverTimer);
-    if (!navRail.classList.contains('pinned')) {
-      navRail.classList.remove('expanded');
-    }
-  });
-
-  // Grid size buttons (3 levels: Compact / Standard / Large)
-  const GRID_SIZES = [130, 180, 240];
+  // Restore saved grid size
   const savedGridSize = parseInt(localStorage.getItem('gridMin') || '180', 10);
   document.documentElement.style.setProperty('--grid-min', savedGridSize + 'px');
-  document.querySelectorAll('.grid-size-btn').forEach(btn => {
-    const sz = parseInt(btn.dataset.size, 10);
-    btn.classList.toggle('active', sz === savedGridSize);
-    btn.addEventListener('click', () => {
-      document.documentElement.style.setProperty('--grid-min', sz + 'px');
-      localStorage.setItem('gridMin', sz);
-      document.querySelectorAll('.grid-size-btn').forEach(b => b.classList.toggle('active', b === btn));
-    });
-  });
 
-  // View toggle (desktop filter bar)
-  function setViewMode(mode) {
-    state.viewMode = mode;
-    document.getElementById('viewGrid').classList.toggle('active', mode === 'grid');
-    document.getElementById('viewList').classList.toggle('active', mode === 'list');
-    // Show grid size buttons only in grid view
-    const sizeBtns = document.getElementById('gridSizeBtns');
-    if (sizeBtns) sizeBtns.style.display = mode === 'grid' ? '' : 'none';
-    localStorage.setItem('viewMode', mode);
-    renderBooks(document.getElementById('bookContainer'));
-  }
-  // Restore persisted view mode
-  const _savedViewMode = localStorage.getItem('viewMode');
-  if (_savedViewMode === 'list') setViewMode('list');
-  document.getElementById('viewGrid').addEventListener('click', () => setViewMode('grid'));
-  document.getElementById('viewList').addEventListener('click', () => setViewMode('list'));
+  // View dropdown button
+  document.getElementById('viewDropdownBtn')?.addEventListener('click', e => {
+    e.stopPropagation();
+    openViewDropdown();
+  });
 
   // Search (grid filter + live dropdown)
   let searchTimeout, liveSearchTimeout;
@@ -1545,16 +1424,22 @@ document.addEventListener('DOMContentLoaded', () => {
     loadBooks();
   });
 
-  // Sort
-  document.getElementById('sortSelect').addEventListener('change', e => { state.filters.sort = e.target.value; loadBooks(); });
+  // Sort — restore persisted value
+  const _sortSel = document.getElementById('sortSelect');
+  if (_sortSel) _sortSel.value = state.filters.sort;
+  document.getElementById('sortSelect').addEventListener('change', e => {
+    state.filters.sort = e.target.value;
+    localStorage.setItem('sortBy', e.target.value);
+    loadBooks();
+  });
   // Order toggle (Asc/Desc)
   const _orderToggle = document.getElementById('orderToggle');
   if (_orderToggle) {
-    // Restore persisted order
     if (state.filters.order === 'desc') { _orderToggle.textContent = '↓ Desc'; }
     _orderToggle.addEventListener('click', () => {
       state.filters.order = state.filters.order === 'asc' ? 'desc' : 'asc';
       _orderToggle.textContent = state.filters.order === 'asc' ? '↑ Asc' : '↓ Desc';
+      localStorage.setItem('sortOrder', state.filters.order);
       loadBooks();
     });
   }
@@ -1571,10 +1456,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeSendDialogBtn').addEventListener('click', () => closeDialog('sendDialog'));
   document.getElementById('closeEmailAddrDialog').addEventListener('click', () => closeDialog('emailAddrDialog'));
   document.getElementById('closeEmailAddrDialogBtn').addEventListener('click', () => closeDialog('emailAddrDialog'));
-  document.getElementById('closeShelfDialog').addEventListener('click', () => closeDialog('shelfDialog'));
-  document.getElementById('closeShelfDialogBtn').addEventListener('click', () => closeDialog('shelfDialog'));
-  document.getElementById('closeAddToShelf').addEventListener('click', () => closeDialog('addToShelfDialog'));
-  document.getElementById('closeAddToShelfBtn').addEventListener('click', () => closeDialog('addToShelfDialog'));
   document.getElementById('closeCoverDialog').addEventListener('click', () => closeDialog('coverDialog'));
   document.getElementById('closeCoverDialogBtn').addEventListener('click', () => closeDialog('coverDialog'));
   document.getElementById('refreshLibraryBtn').addEventListener('click', async () => {
@@ -1620,13 +1501,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Email address management
   document.getElementById('addEmailBtn')?.addEventListener('click', openAddEmailAddr);
   document.getElementById('saveEmailAddrBtn').addEventListener('click', saveEmailAddr);
-
-  // Shelf dialog
-  document.getElementById('newShelfBtn').addEventListener('click', openNewShelf);
-  document.getElementById('saveShelfBtn').addEventListener('click', saveShelf);
-
-  // Add to shelf
-  document.getElementById('confirmAddToShelf').addEventListener('click', confirmAddToShelf);
 
   // Cover dialog
   const coverDropZone = document.getElementById('coverDropZone');
@@ -1684,15 +1558,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('exportLogsBtn')?.addEventListener('click', exportLogs);
   document.getElementById('logLevelSelect')?.addEventListener('change', saveLogLevel);
 
-  // Smart shelf toggle
-  document.getElementById('shelfIsSmart')?.addEventListener('change', e => {
-    document.getElementById('shelfRulesPanel').style.display = e.target.checked ? '' : 'none';
-  });
-  document.getElementById('addShelfRuleBtn')?.addEventListener('click', () => {
-    _shelfRules.push({ field: 'author', op: 'contains', value: '' });
-    renderShelfRules();
-  });
-
   // User menu
   document.getElementById('uploadNavBtn')?.addEventListener('click', () => navigate('upload'));
 
@@ -1712,9 +1577,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const _savedTheme = localStorage.getItem('colorTheme');
   if (_savedTheme) applyTheme(_savedTheme);
 
-  // Restore view from URL hash (set by navigate(); survives refresh/bookmark/share)
-  const _VIEWS = ['library', 'shelves', 'upload', 'settings'];
-  // Support #settings/tabname format
+  // Restore view from URL hash
+  const _VIEWS = ['library', 'upload', 'settings'];
   const _rawHash = location.hash.replace('#', '');
   const _view = _rawHash.startsWith('settings') ? 'settings' : _rawHash;
   navigate(_VIEWS.includes(_view) ? _view : 'library');
