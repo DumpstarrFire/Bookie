@@ -50,25 +50,26 @@ export default function FilterBar() {
     perPage, setPerPage,
     selectionMode, selectedBookIds, setSelectionMode, clearSelection, selectAllBooks,
   } = useStore()
-  const [mobileOpen, setMobileOpen] = useState(false)
+  // 'filters' | 'views' | null — only one panel open at a time on mobile
+  const [mobilePanel, setMobilePanel] = useState<'filters' | 'views' | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [tagging, setTagging] = useState(false)
   const qc = useQueryClient()
 
+  const toggleMobilePanel = (panel: 'filters' | 'views') =>
+    setMobilePanel(prev => (prev === panel ? null : panel))
+
   // Hide filter bar when scrolling down on mobile, reveal on scroll up
   const [barHidden, setBarHidden] = useState(false)
   const lastScrollY = useRef(0)
-  const mobileOpenRef = useRef(mobileOpen)
-  useEffect(() => { mobileOpenRef.current = mobileOpen }, [mobileOpen])
+  const mobilePanelRef = useRef(mobilePanel)
+  useEffect(() => { mobilePanelRef.current = mobilePanel }, [mobilePanel])
 
   useEffect(() => {
     const onScroll = () => {
-      // Never hide on sm+
       if (window.innerWidth >= 640) { setBarHidden(false); return }
-      // Never hide when mobile filters are expanded
-      if (mobileOpenRef.current) { setBarHidden(false); lastScrollY.current = window.scrollY; return }
+      if (mobilePanelRef.current !== null) { setBarHidden(false); lastScrollY.current = window.scrollY; return }
       const current = window.scrollY
-      // Always show near the top of the page
       if (current < 80) { setBarHidden(false); lastScrollY.current = current; return }
       const delta = current - lastScrollY.current
       if (Math.abs(delta) > 6) setBarHidden(delta > 0)
@@ -130,10 +131,9 @@ export default function FilterBar() {
     }
   }
 
-  // ── Selection toolbar (replaces filters when selection mode is active) ─────
+  // ── Selection toolbar ──────────────────────────────────────────────────────
   const selectionToolbar = (
     <div className="flex items-center justify-between gap-3 w-full flex-wrap">
-      {/* Left: count + select controls */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-medium text-ink">
           {selectedBookIds.length} selected
@@ -157,9 +157,7 @@ export default function FilterBar() {
         </button>
       </div>
 
-      {/* Right: actions + exit */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Assign tag */}
         {tags.length > 0 && (
           <div className="relative w-40">
             <select
@@ -181,7 +179,6 @@ export default function FilterBar() {
           </div>
         )}
 
-        {/* Delete */}
         <button
           type="button"
           onClick={handleBulkDelete}
@@ -192,7 +189,6 @@ export default function FilterBar() {
           Delete{selectedBookIds.length > 0 ? ` (${selectedBookIds.length})` : ''}
         </button>
 
-        {/* Exit selection mode */}
         <button
           type="button"
           onClick={() => setSelectionMode(false)}
@@ -208,7 +204,6 @@ export default function FilterBar() {
 
   const filterControls = (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Format */}
       <Sel>
         <select
           value={filters.format}
@@ -222,7 +217,6 @@ export default function FilterBar() {
         </select>
       </Sel>
 
-      {/* Tag — only shown when tags exist */}
       {tags.length > 0 && (
         <Sel width="w-32">
           <select
@@ -239,7 +233,6 @@ export default function FilterBar() {
         </Sel>
       )}
 
-      {/* Series — only shown when series exist */}
       {seriesList.length > 0 && (
         <Sel width="w-36">
           <select
@@ -256,7 +249,6 @@ export default function FilterBar() {
         </Sel>
       )}
 
-      {/* Sort */}
       <Sel width="w-36">
         <select
           value={filters.sort}
@@ -270,7 +262,6 @@ export default function FilterBar() {
         </select>
       </Sel>
 
-      {/* Order toggle */}
       <button
         type="button"
         onClick={toggleOrder}
@@ -280,7 +271,6 @@ export default function FilterBar() {
         {filters.order === 'asc' ? '↑ Asc' : '↓ Desc'}
       </button>
 
-      {/* Clear */}
       {hasActiveFilters && (
         <button
           type="button"
@@ -295,122 +285,160 @@ export default function FilterBar() {
     </div>
   )
 
+  // Shared view controls — used in desktop row and mobile panel
+  const viewControls = (
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Per-page dropdown */}
+      <div className="relative">
+        <select
+          value={perPage}
+          onChange={e => setPerPage(Number(e.target.value))}
+          className={selectCls}
+          aria-label="Books per page"
+        >
+          {PER_PAGE_OPTIONS.map(n => (
+            <option key={n} value={n}>{n} / page</option>
+          ))}
+        </select>
+        <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+      </div>
+
+      {/* Grid size — only in grid mode */}
+      {viewMode === 'grid' && (
+        <div className="relative">
+          <select
+            value={gridSize}
+            onChange={e => setGridSize(Number(e.target.value))}
+            className={selectCls}
+            aria-label="Grid size"
+          >
+            {GRID_SIZES.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+        </div>
+      )}
+
+      {/* View mode toggle */}
+      <div className="flex items-stretch h-8 rounded border border-line overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setViewMode('grid')}
+          aria-label="Grid view"
+          aria-pressed={viewMode === 'grid'}
+          className={[
+            'px-2.5 transition-colors focus-visible:outline-none',
+            viewMode === 'grid'
+              ? 'bg-surface-high text-ink'
+              : 'bg-surface-raised text-ink-muted hover:text-ink',
+          ].join(' ')}
+        >
+          <Grid2x2 size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode('list')}
+          aria-label="List view"
+          aria-pressed={viewMode === 'list'}
+          className={[
+            'px-2.5 transition-colors border-l border-line focus-visible:outline-none',
+            viewMode === 'list'
+              ? 'bg-surface-high text-ink'
+              : 'bg-surface-raised text-ink-muted hover:text-ink',
+          ].join(' ')}
+        >
+          <List size={15} />
+        </button>
+      </div>
+    </div>
+  )
+
   return (
     <div className={[
       'sticky top-16 z-30 bg-surface border-b border-line px-4 py-2.5 flex flex-col gap-2',
       'transition-transform duration-300 ease-in-out',
       barHidden ? '-translate-y-full sm:translate-y-0' : 'translate-y-0',
     ].join(' ')}>
-      {/* Search — mobile only (desktop search is in TopBar) */}
-      <div className="sm:hidden">
-        <SearchBar />
+
+      {/* Mobile: search bar row with Filters + Views triggers on the right */}
+      <div className="sm:hidden flex items-center gap-2">
+        <div className="flex-1">
+          <SearchBar />
+        </div>
+
+        {!selectionMode && (
+          <>
+            {/* Filters trigger */}
+            <button
+              type="button"
+              onClick={() => toggleMobilePanel('filters')}
+              className={[
+                'relative flex items-center justify-center w-8 h-8 shrink-0 rounded border bg-surface-raised transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                mobilePanel === 'filters'
+                  ? 'border-accent text-accent bg-accent/10'
+                  : hasActiveFilters
+                    ? 'border-accent text-accent'
+                    : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
+              ].join(' ')}
+              aria-expanded={mobilePanel === 'filters'}
+              aria-label="Filters"
+            >
+              <SlidersHorizontal size={14} />
+              {hasActiveFilters && mobilePanel !== 'filters' && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent border-2 border-surface" />
+              )}
+            </button>
+
+            {/* Views trigger */}
+            <button
+              type="button"
+              onClick={() => toggleMobilePanel('views')}
+              className={[
+                'flex items-center justify-center w-8 h-8 shrink-0 rounded border bg-surface-raised transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                mobilePanel === 'views'
+                  ? 'border-accent text-accent bg-accent/10'
+                  : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
+              ].join(' ')}
+              aria-expanded={mobilePanel === 'views'}
+              aria-label="View options"
+            >
+              {viewMode === 'grid' ? <Grid2x2 size={14} /> : <List size={14} />}
+            </button>
+          </>
+        )}
       </div>
 
+      {/* Desktop + mobile selection toolbar row */}
       <div className="flex items-center justify-between gap-3">
         {selectionMode ? (
-          // ── Selection mode: full-width toolbar ───────────────────────────
           <div className="flex-1 min-w-0">
             {selectionToolbar}
           </div>
         ) : (
           <>
-            {/* Mobile toggle */}
-            <button
-              type="button"
-              onClick={() => setMobileOpen(v => !v)}
-              className={[
-                'sm:hidden relative flex items-center justify-center w-8 h-8 rounded border bg-surface-raised transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                hasActiveFilters
-                  ? 'border-accent text-accent'
-                  : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
-              ].join(' ')}
-              aria-expanded={mobileOpen}
-              aria-label="Filters"
-            >
-              <SlidersHorizontal size={14} />
-              {hasActiveFilters && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent border-2 border-surface" />
-              )}
-            </button>
-
             {/* Desktop: inline filters */}
             <div className="hidden sm:flex flex-1 min-w-0">
               {filterControls}
             </div>
 
-            {/* Right: per-page + grid size + view mode */}
-            <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
-              {/* Per-page dropdown */}
-              <div className="relative">
-                <select
-                  value={perPage}
-                  onChange={e => setPerPage(Number(e.target.value))}
-                  className={selectCls}
-                  aria-label="Books per page"
-                >
-                  {PER_PAGE_OPTIONS.map(n => (
-                    <option key={n} value={n}>{n} / page</option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
-              </div>
-
-              {viewMode === 'grid' && (
-                <div className="relative">
-                  <select
-                    value={gridSize}
-                    onChange={e => setGridSize(Number(e.target.value))}
-                    className={selectCls}
-                    aria-label="Grid size"
-                  >
-                    {GRID_SIZES.map(s => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
-                </div>
-              )}
-
-              {/* View mode toggle */}
-              <div className="flex items-stretch h-8 rounded border border-line overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('grid')}
-                  aria-label="Grid view"
-                  aria-pressed={viewMode === 'grid'}
-                  className={[
-                    'px-2.5 transition-colors focus-visible:outline-none',
-                    viewMode === 'grid'
-                      ? 'bg-surface-high text-ink'
-                      : 'bg-surface-raised text-ink-muted hover:text-ink',
-                  ].join(' ')}
-                >
-                  <Grid2x2 size={15} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('list')}
-                  aria-label="List view"
-                  aria-pressed={viewMode === 'list'}
-                  className={[
-                    'px-2.5 transition-colors border-l border-line focus-visible:outline-none',
-                    viewMode === 'list'
-                      ? 'bg-surface-high text-ink'
-                      : 'bg-surface-raised text-ink-muted hover:text-ink',
-                  ].join(' ')}
-                >
-                  <List size={15} />
-                </button>
-              </div>
+            {/* Desktop: right controls */}
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
+              {viewControls}
             </div>
           </>
         )}
       </div>
 
-      {/* Mobile: collapsible filters (only in normal mode) */}
-      {!selectionMode && mobileOpen && (
+      {/* Mobile: collapsible panels — only one shown at a time */}
+      {!selectionMode && mobilePanel === 'filters' && (
         <div className="sm:hidden pb-1">
           {filterControls}
+        </div>
+      )}
+      {!selectionMode && mobilePanel === 'views' && (
+        <div className="sm:hidden pb-1">
+          {viewControls}
         </div>
       )}
     </div>
