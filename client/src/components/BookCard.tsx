@@ -120,7 +120,7 @@ export default function BookCard({ book, onClick }: BookCardProps) {
             <button
               type="button"
               onClick={e => { e.stopPropagation(); setMenuOpen(v => !v) }}
-              className="w-7 h-7 flex items-center justify-center rounded bg-black/60 text-white hover:bg-black/80 transition-colors"
+              className="w-7 h-7 flex items-center justify-center rounded bg-black/25 text-white hover:bg-black/45 transition-colors"
               aria-label="Book actions"
             >
               <MoreVertical size={13} />
