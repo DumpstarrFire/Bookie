@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Grid2x2, List, SlidersHorizontal, ChevronDown, X, CheckSquare, Tag as TagIcon, Trash2 } from 'lucide-react'
 import { useStore } from '../store'
@@ -51,6 +51,29 @@ export default function FilterBar() {
   const [deleting, setDeleting] = useState(false)
   const [tagging, setTagging] = useState(false)
   const qc = useQueryClient()
+
+  // Hide filter bar when scrolling down on mobile, reveal on scroll up
+  const [barHidden, setBarHidden] = useState(false)
+  const lastScrollY = useRef(0)
+  const mobileOpenRef = useRef(mobileOpen)
+  useEffect(() => { mobileOpenRef.current = mobileOpen }, [mobileOpen])
+
+  useEffect(() => {
+    const onScroll = () => {
+      // Never hide on sm+
+      if (window.innerWidth >= 640) { setBarHidden(false); return }
+      // Never hide when mobile filters are expanded
+      if (mobileOpenRef.current) { setBarHidden(false); lastScrollY.current = window.scrollY; return }
+      const current = window.scrollY
+      // Always show near the top of the page
+      if (current < 80) { setBarHidden(false); lastScrollY.current = current; return }
+      const delta = current - lastScrollY.current
+      if (Math.abs(delta) > 6) setBarHidden(delta > 0)
+      lastScrollY.current = current
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const { data: tags = [] } = useQuery<Tag[]>({
     queryKey: ['tags'],
@@ -270,7 +293,11 @@ export default function FilterBar() {
   )
 
   return (
-    <div className="sticky top-14 z-30 bg-surface border-b border-line px-4 py-2.5 flex flex-col gap-2">
+    <div className={[
+      'sticky top-16 z-30 bg-surface border-b border-line px-4 py-2.5 flex flex-col gap-2',
+      'transition-transform duration-300 ease-in-out',
+      barHidden ? '-translate-y-full sm:translate-y-0' : 'translate-y-0',
+    ].join(' ')}>
       {/* Search — mobile only (desktop search is in TopBar) */}
       <div className="sm:hidden">
         <SearchBar />
@@ -307,7 +334,7 @@ export default function FilterBar() {
               <button
                 type="button"
                 onClick={() => setSelectionMode(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="flex items-center gap-1.5 h-8 px-2.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 aria-label="Select books"
                 title="Select books"
               >
@@ -332,14 +359,14 @@ export default function FilterBar() {
               )}
 
               {/* View mode toggle */}
-              <div className="flex items-stretch rounded border border-line overflow-hidden">
+              <div className="flex items-stretch h-8 rounded border border-line overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setViewMode('grid')}
                   aria-label="Grid view"
                   aria-pressed={viewMode === 'grid'}
                   className={[
-                    'px-2.5 py-1.5 transition-colors focus-visible:outline-none',
+                    'px-2.5 transition-colors focus-visible:outline-none',
                     viewMode === 'grid'
                       ? 'bg-surface-high text-ink'
                       : 'bg-surface-raised text-ink-muted hover:text-ink',
@@ -353,7 +380,7 @@ export default function FilterBar() {
                   aria-label="List view"
                   aria-pressed={viewMode === 'list'}
                   className={[
-                    'px-2.5 py-1.5 transition-colors border-l border-line focus-visible:outline-none',
+                    'px-2.5 transition-colors border-l border-line focus-visible:outline-none',
                     viewMode === 'list'
                       ? 'bg-surface-high text-ink'
                       : 'bg-surface-raised text-ink-muted hover:text-ink',

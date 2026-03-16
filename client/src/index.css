@@ -140,6 +140,13 @@
   border-radius: 4px;
 }
 
+/* ─── Prevent iOS auto-zoom on input focus (requires font-size >= 16px) ──── */
+@media (max-width: 639px) {
+  input, select, textarea {
+    font-size: 16px;
+  }
+}
+
 /* ─── Transition defaults ────────────────────────────────────────────────── */
 @layer base {
   a,
