@@ -68,6 +68,7 @@ export interface BooksResponse {
 export type SortField =
   | 'title'
   | 'author'
+  | 'series'
   | 'date_added'
   | 'date_modified'
   | 'published_date'
@@ -79,6 +80,7 @@ export interface Filters {
   q: string
   format: string
   tag: string
+  series: string
   sort: SortField
   order: 'asc' | 'desc'
 }

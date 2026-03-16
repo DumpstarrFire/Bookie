@@ -1,9 +1,11 @@
 import React, { useRef, useState } from 'react';
 import {
   BookOpen,
+  Check,
   ChevronDown,
   Loader2,
   LogOut,
+  Monitor,
   Moon,
   RefreshCw,
   Settings,
@@ -14,9 +16,24 @@ import {
 import api from '../api/client';
 import { useStore } from '../store';
 import { useToast } from '../App';
+import SearchBar from './SearchBar';
 
 interface Props {
   onAuthChange: () => void;
+}
+
+type ThemeMode = 'system' | 'light' | 'dark';
+
+function applyTheme(mode: ThemeMode) {
+  if (mode === 'light') {
+    document.documentElement.dataset.theme = 'light';
+  } else if (mode === 'dark') {
+    document.documentElement.dataset.theme = '';
+  } else {
+    // system
+    const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.dataset.theme = prefersLight ? 'light' : '';
+  }
 }
 
 export default function TopBar({ onAuthChange }: Props) {
@@ -24,14 +41,15 @@ export default function TopBar({ onAuthChange }: Props) {
   const { addToast } = useToast();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [lightMode, setLightMode] = useState(() => document.documentElement.dataset.theme === 'light');
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    return (localStorage.getItem('theme') as ThemeMode) ?? 'system';
+  });
   const menuRef = useRef<HTMLDivElement>(null);
 
-  function toggleTheme() {
-    const next = !lightMode;
-    setLightMode(next);
-    document.documentElement.dataset.theme = next ? 'light' : '';
-    localStorage.setItem('theme', next ? 'light' : 'dark');
+  function setTheme(mode: ThemeMode) {
+    setThemeMode(mode);
+    localStorage.setItem('theme', mode);
+    applyTheme(mode);
   }
 
   async function handleScan() {
@@ -66,6 +84,12 @@ export default function TopBar({ onAuthChange }: Props) {
     }
   }
 
+  const themeOptions: { mode: ThemeMode; label: string; Icon: typeof Sun }[] = [
+    { mode: 'system', label: 'System', Icon: Monitor },
+    { mode: 'light', label: 'Light', Icon: Sun },
+    { mode: 'dark', label: 'Dark', Icon: Moon },
+  ];
+
   return (
     <header className="sticky top-0 z-40 h-14 bg-surface-card border-b border-line flex items-center gap-3 px-4">
       {/* Brand — always visible */}
@@ -77,8 +101,15 @@ export default function TopBar({ onAuthChange }: Props) {
         <span className="font-semibold text-base tracking-tight">Bookie</span>
       </button>
 
-      {/* Spacer */}
-      <div className="flex-1" />
+      {/* Desktop search — center-aligned, max-width constrained */}
+      <div className="hidden sm:flex flex-1 justify-center px-4">
+        <div className="w-full max-w-sm">
+          <SearchBar />
+        </div>
+      </div>
+
+      {/* Spacer on mobile */}
+      <div className="flex-1 sm:hidden" />
 
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
@@ -113,7 +144,7 @@ export default function TopBar({ onAuthChange }: Props) {
           </button>
 
           {userMenuOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-48 bg-surface-raised border border-line rounded-lg shadow-xl py-1 z-50">
+            <div className="absolute right-0 top-full mt-1.5 w-52 bg-surface-raised border border-line rounded-lg shadow-xl py-1 z-50">
               <div className="px-3 py-2 border-b border-line">
                 <p className="text-xs text-ink-muted">Signed in as</p>
                 <p className="text-sm font-medium text-ink truncate">{user?.username}</p>
@@ -138,15 +169,21 @@ export default function TopBar({ onAuthChange }: Props) {
                 Refresh library
               </button>
 
-              <button
-                onClick={toggleTheme}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink hover:bg-surface-high transition-colors"
-              >
-                {lightMode
-                  ? <Moon className="w-3.5 h-3.5 text-ink-muted" />
-                  : <Sun className="w-3.5 h-3.5 text-ink-muted" />}
-                {lightMode ? 'Dark mode' : 'Light mode'}
-              </button>
+              {/* Appearance */}
+              <div className="border-t border-line mt-1 pt-1">
+                <p className="px-3 py-1 text-[11px] font-medium text-ink-faint uppercase tracking-wide">Appearance</p>
+                {themeOptions.map(({ mode, label, Icon }) => (
+                  <button
+                    key={mode}
+                    onClick={() => setTheme(mode)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink hover:bg-surface-high transition-colors"
+                  >
+                    <Icon className="w-3.5 h-3.5 text-ink-muted" />
+                    <span className="flex-1 text-left">{label}</span>
+                    {themeMode === mode && <Check className="w-3.5 h-3.5 text-accent" />}
+                  </button>
+                ))}
+              </div>
 
               <div className="border-t border-line mt-1 pt-1">
                 <button

@@ -47,6 +47,7 @@ const defaultFilters: Filters = {
   q: '',
   format: '',
   tag: '',
+  series: '',
   sort: 'author',
   order: 'asc',
 }

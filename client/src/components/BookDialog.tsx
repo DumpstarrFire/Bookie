@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Trash2, Save, Image, ChevronDown, Check, AlertCircle, Download, Send } from 'lucide-react'
+import { BookOpen, Trash2, Save, Image, ChevronDown, Check, AlertCircle } from 'lucide-react'
+
 import * as api from '../api/client'
-import { Book, Tag, EmailAddress } from '../types'
+import { Book, Tag } from '../types'
 import Dialog from './Dialog'
 import MetaDialog from './MetaDialog'
 import CoverDialog from './CoverDialog'
 import Spinner from './Spinner'
-import { useToast } from '../App'
 
 interface BookDialogProps {
   bookId: number
@@ -118,7 +118,7 @@ function TagDropdown({ bookId, allTags, bookTags, onTagAdded, onTagRemoved }: Ta
 
 export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProps) {
   const qc = useQueryClient()
-  const { addToast } = useToast()
+
 
   const { data: book, isLoading, isError } = useQuery<Book>({
     queryKey: ['book', bookId],
@@ -130,11 +130,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
     queryFn: () => api.getTags(),
   })
 
-  const { data: emailAddresses = [] } = useQuery<EmailAddress[]>({
-    queryKey: ['emailAddresses'],
-    queryFn: () => api.getEmailAddresses(),
-  })
-
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
   const [publishedDate, setPublishedDate] = useState('')
@@ -144,21 +139,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
   const [showMetaDialog, setShowMetaDialog] = useState(false)
   const [showCoverDialog, setShowCoverDialog] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [emailMenuOpen, setEmailMenuOpen] = useState(false)
-
-  const emailMenuRef = useRef<HTMLDivElement>(null)
-
-  // Close email menu on outside click
-  useEffect(() => {
-    if (!emailMenuOpen) return
-    const handleClick = (e: MouseEvent) => {
-      if (emailMenuRef.current && !emailMenuRef.current.contains(e.target as Node)) {
-        setEmailMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [emailMenuOpen])
 
   // Populate form when book loads
   useEffect(() => {
@@ -183,6 +163,7 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
     onSuccess: (updated) => {
       qc.setQueryData(['book', bookId], updated)
       qc.invalidateQueries({ queryKey: ['books'] })
+      onClose()
     },
   })
 
@@ -209,17 +190,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
       qc.invalidateQueries({ queryKey: ['book', bookId] })
       qc.invalidateQueries({ queryKey: ['tags'] })
       qc.invalidateQueries({ queryKey: ['books'] })
-    },
-  })
-
-  const sendMutation = useMutation({
-    mutationFn: (recipient: string) => api.sendBook(bookId, recipient),
-    onSuccess: () => {
-      setEmailMenuOpen(false)
-      addToast('success', 'Book sent!')
-    },
-    onError: (e: Error) => {
-      addToast('error', e.message)
     },
   })
 
@@ -260,37 +230,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
 
       {/* Right side actions */}
       <div className="flex items-center gap-2">
-        {/* Send to email */}
-        {emailAddresses.length > 0 && (
-          <div ref={emailMenuRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setEmailMenuOpen(v => !v)}
-              disabled={sendMutation.isPending}
-              className="flex items-center gap-1.5 px-3 py-2 rounded text-sm font-medium text-ink border border-line hover:bg-surface-raised transition-colors"
-              title="Send book via email"
-            >
-              {sendMutation.isPending ? <Spinner size={14} /> : <Send size={14} />}
-              Send
-            </button>
-            {emailMenuOpen && (
-              <div className="absolute right-0 bottom-full mb-1 w-52 bg-surface-raised border border-line rounded-lg shadow-xl py-1 z-50">
-                {emailAddresses.map(addr => (
-                  <button
-                    key={addr.id}
-                    type="button"
-                    onClick={() => sendMutation.mutate(addr.email)}
-                    className="flex flex-col w-full px-3 py-2 text-left hover:bg-surface-high transition-colors"
-                  >
-                    <span className="text-sm text-ink truncate">{addr.label || addr.email}</span>
-                    {addr.label && <span className="text-xs text-ink-muted truncate">{addr.email}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
         <button
           type="button"
           onClick={() => setShowMetaDialog(true)}
@@ -330,8 +269,8 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
         {book && (
           <div className="p-5 flex flex-col sm:flex-row gap-6">
             {/* Cover column */}
-            <div className="shrink-0 flex flex-col items-center gap-3 sm:w-40">
-              <div className="w-full sm:w-40 aspect-[2/3] rounded-lg overflow-hidden bg-surface-raised border border-line flex items-center justify-center">
+            <div className="shrink-0 flex flex-col items-center gap-3 w-1/2 mx-auto sm:mx-0 sm:w-40">
+              <div className="w-full aspect-[2/3] rounded-lg overflow-hidden bg-surface-raised border border-line flex items-center justify-center">
                 {coverUrl ? (
                   <img
                     src={coverUrl}
@@ -469,15 +408,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
             <span className="truncate font-mono flex-1 min-w-0">{book.filename}</span>
             <span>{formatFileSize(book.file_size)}</span>
             {book.date_added && <span>Added {formatDate(book.date_added)}</span>}
-            <a
-              href={api.getDownloadUrl(bookId)}
-              download
-              className="flex items-center gap-1 text-ink-muted hover:text-ink transition-colors shrink-0"
-              title="Download file"
-            >
-              <Download size={12} />
-              Download
-            </a>
           </div>
         )}
       </Dialog>

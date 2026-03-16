@@ -1,6 +1,9 @@
-import { useState } from 'react'
-import { BookOpen } from 'lucide-react'
-import { Book } from '../types'
+import { useState, useRef, useEffect } from 'react'
+import { BookOpen, MoreVertical, Download, Send, Loader2 } from 'lucide-react'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { Book, EmailAddress } from '../types'
+import * as api from '../api/client'
+import { useToast } from '../App'
 
 interface BookListItemProps {
   book: Book
@@ -25,6 +28,10 @@ function formatDate(iso: string | null): string {
 
 export default function BookListItem({ book, onClick }: BookListItemProps) {
   const [imgError, setImgError] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [emailMenuOpen, setEmailMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const { addToast } = useToast()
 
   const coverUrl = book.cover_filename && !imgError
     ? `/api/books/${book.id}/cover`
@@ -34,78 +41,161 @@ export default function BookListItem({ book, onClick }: BookListItemProps) {
     ? book.file_format.toUpperCase().replace('.', '')
     : null
 
+  const { data: emailAddresses = [] } = useQuery<EmailAddress[]>({
+    queryKey: ['emailAddresses'],
+    queryFn: () => api.getEmailAddresses(),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const sendMutation = useMutation({
+    mutationFn: (recipient: string) => api.sendBook(book.id, recipient),
+    onSuccess: () => { setMenuOpen(false); setEmailMenuOpen(false); addToast('success', 'Book sent!') },
+    onError: (e: Error) => addToast('error', e.message),
+  })
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+        setEmailMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [menuOpen])
+
   return (
-    <button
-      onClick={onClick}
+    <div
       className={[
         'group w-full flex items-center gap-3 px-3 py-2.5 text-left',
         'rounded-lg border border-transparent',
         'hover:bg-surface-raised hover:border-line',
-        'active:bg-surface-high',
         'transition-colors duration-150',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        'cursor-pointer min-w-0',
+        'cursor-pointer min-w-0 relative',
       ].join(' ')}
-      aria-label={`Open ${book.title ?? book.filename}`}
     >
-      {/* Thumbnail */}
-      <div className="shrink-0 w-10 h-[60px] rounded overflow-hidden bg-surface-raised border border-line flex items-center justify-center">
-        {coverUrl ? (
-          <img
-            src={coverUrl}
-            alt=""
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover"
-            loading="lazy"
-            draggable={false}
-          />
-        ) : (
-          <BookOpen size={18} className="text-ink-faint" />
-        )}
-      </div>
-
-      {/* Title + Author */}
-      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-        <p className="text-ink text-sm font-medium leading-snug truncate">
-          {book.title ?? book.filename}
-        </p>
-        {book.author && (
-          <p className="text-ink-muted text-xs truncate">{book.author}</p>
-        )}
-      </div>
-
-      {/* Series info */}
-      {book.series && (
-        <div className="hidden md:flex flex-col items-start shrink-0 w-36 min-w-0">
-          <p className="text-ink-muted text-xs truncate w-full" title={book.series}>
-            {book.series}
-            {book.series_order != null && (
-              <span className="ml-1 text-ink-faint">#{book.series_order}</span>
-            )}
-          </p>
+      {/* Main clickable area */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onClick}
+        onKeyDown={e => e.key === 'Enter' && onClick()}
+        className="flex items-center gap-3 flex-1 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
+        aria-label={`Open ${book.title ?? book.filename}`}
+      >
+        {/* Thumbnail */}
+        <div className="shrink-0 w-10 h-[60px] rounded overflow-hidden bg-surface-raised border border-line flex items-center justify-center">
+          {coverUrl ? (
+            <img
+              src={coverUrl}
+              alt=""
+              onError={() => setImgError(true)}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              draggable={false}
+            />
+          ) : (
+            <BookOpen size={18} className="text-ink-faint" />
+          )}
         </div>
-      )}
 
-      {/* Format badge */}
-      {badge && (
-        <span className="hidden sm:inline-flex shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase bg-surface-high text-ink-muted border border-line">
-          {badge}
-        </span>
-      )}
+        {/* Title + Author */}
+        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+          <p className="text-ink text-sm font-medium leading-snug truncate">
+            {book.title ?? book.filename}
+          </p>
+          {book.author && (
+            <p className="text-ink-muted text-xs truncate">{book.author}</p>
+          )}
+        </div>
 
-      {/* File size */}
-      {book.file_size != null && (
-        <span className="hidden sm:inline text-ink-muted text-xs shrink-0 w-16 text-right">
-          {formatFileSize(book.file_size)}
-        </span>
-      )}
+        {/* Series info */}
+        {book.series && (
+          <div className="hidden md:flex flex-col items-start shrink-0 w-36 min-w-0">
+            <p className="text-ink-muted text-xs truncate w-full" title={book.series}>
+              {book.series}
+              {book.series_order != null && (
+                <span className="ml-1 text-ink-faint">#{book.series_order}</span>
+              )}
+            </p>
+          </div>
+        )}
 
-      {/* Date added */}
-      {book.date_added && (
-        <span className="hidden lg:inline text-ink-muted text-xs shrink-0 w-28 text-right">
-          {formatDate(book.date_added)}
-        </span>
-      )}
-    </button>
+        {/* Format badge */}
+        {badge && (
+          <span className="hidden sm:inline-flex shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase bg-surface-high text-ink-muted border border-line">
+            {badge}
+          </span>
+        )}
+
+        {/* File size */}
+        {book.file_size != null && (
+          <span className="hidden sm:inline text-ink-muted text-xs shrink-0 w-16 text-right">
+            {formatFileSize(book.file_size)}
+          </span>
+        )}
+
+        {/* Date added */}
+        {book.date_added && (
+          <span className="hidden lg:inline text-ink-muted text-xs shrink-0 w-28 text-right">
+            {formatDate(book.date_added)}
+          </span>
+        )}
+      </div>
+
+      {/* Three-dot menu */}
+      <div ref={menuRef} className="relative shrink-0" onClick={e => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => { setMenuOpen(v => !v); setEmailMenuOpen(false) }}
+          className="w-7 h-7 flex items-center justify-center rounded text-ink-muted hover:text-ink hover:bg-surface-high transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+          aria-label="Book actions"
+        >
+          <MoreVertical size={15} />
+        </button>
+
+        {menuOpen && (
+          <div className="absolute right-0 top-full mt-0.5 w-44 bg-surface-raised border border-line rounded-lg shadow-xl py-1 z-50">
+            <a
+              href={api.getDownloadUrl(book.id)}
+              download
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-surface-high transition-colors"
+            >
+              <Download size={14} className="text-ink-muted" />
+              Download
+            </a>
+
+            {emailAddresses.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setEmailMenuOpen(v => !v)}
+                disabled={sendMutation.isPending}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-ink hover:bg-surface-high transition-colors disabled:opacity-50"
+              >
+                {sendMutation.isPending
+                  ? <Loader2 size={14} className="text-ink-muted animate-spin" />
+                  : <Send size={14} className="text-ink-muted" />}
+                Send to…
+              </button>
+            )}
+
+            {emailMenuOpen && emailAddresses.map(addr => (
+              <button
+                key={addr.id}
+                type="button"
+                onClick={() => sendMutation.mutate(addr.email)}
+                className="flex flex-col w-full px-5 py-1.5 text-left hover:bg-surface-high transition-colors"
+              >
+                <span className="text-xs text-ink truncate">{addr.label || addr.email}</span>
+                {addr.label && <span className="text-[10px] text-ink-muted truncate">{addr.email}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

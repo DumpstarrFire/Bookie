@@ -260,6 +260,7 @@ def create_app():
                 db.or_(
                     Book.title.ilike(like),
                     Book.author.ilike(like),
+                    Book.series.ilike(like),
                     Book.isbn.ilike(like),
                     Book.isbn13.ilike(like),
                 )
@@ -267,6 +268,9 @@ def create_app():
         fmt = request.args.get("format")
         if fmt:
             query = query.filter(Book.file_format == fmt.lower())
+        series_filter = request.args.get("series")
+        if series_filter:
+            query = query.filter(Book.series == series_filter)
         shelf_id = request.args.get("shelf_id", type=int)
         if shelf_id:
             shelf = Shelf.query.get(shelf_id)
@@ -322,6 +326,15 @@ def create_app():
                     Book.series_order.asc(),
                     Book.title.asc(),
                 )
+        elif sort == "title":
+            # Sort by title, stripping leading articles (A, An, The)
+            sort_key = db.case(
+                (Book.title.ilike("the %"), db.func.substr(Book.title, 5)),
+                (Book.title.ilike("an %"), db.func.substr(Book.title, 4)),
+                (Book.title.ilike("a %"), db.func.substr(Book.title, 3)),
+                else_=Book.title,
+            )
+            query = query.order_by(sort_key.desc() if order == "desc" else sort_key.asc())
         else:
             col = getattr(Book, sort, None)
             if col is not None:
@@ -811,6 +824,19 @@ def create_app():
     # -----------------------------------------------------------------------
     # Tags
     # -----------------------------------------------------------------------
+
+    @app.route("/api/series", methods=["GET"])
+    @login_required
+    def list_series():
+        rows = (
+            db.session.query(Book.series)
+            .filter(Book.series.isnot(None))
+            .filter(Book.series != "")
+            .distinct()
+            .order_by(Book.series.asc())
+            .all()
+        )
+        return jsonify([r[0] for r in rows])
 
     @app.route("/api/tags", methods=["GET"])
     @login_required

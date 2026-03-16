@@ -164,7 +164,7 @@ export default function CoverDialog({ bookId, bookTitle, bookAuthor, fileFormat,
           <div className="flex justify-center py-8"><Spinner size={24} /></div>
         )}
         {!searching && coverResults.length > 0 && (
-          <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 max-h-72 overflow-y-auto pr-1">
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-72 overflow-y-auto pr-1">
             {coverResults.map((r, i) => (
               <button
                 key={i}

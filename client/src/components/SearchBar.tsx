@@ -83,7 +83,7 @@ export default function SearchBar() {
       <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
       <input
         ref={inputRef}
-        type="search"
+        type="text"
         value={localQ}
         onChange={e => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}

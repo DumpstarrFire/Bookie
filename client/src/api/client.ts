@@ -83,6 +83,12 @@ export function deleteBook(id: number): Promise<void> {
   return api<void>(`/api/books/${id}`, { method: 'DELETE' })
 }
 
+// ─── Series ───────────────────────────────────────────────────────────────────
+
+export function getSeries(): Promise<string[]> {
+  return api<string[]>('/api/series')
+}
+
 // ─── Tags ─────────────────────────────────────────────────────────────────────
 
 export function getTags(): Promise<Tag[]> {
@@ -423,6 +429,8 @@ export default {
   getUsers,
   createUser,
   deleteUser,
+  // Series
+  getSeries,
   // Tags admin
   adminGetTags,
   adminCreateTag,

@@ -65,7 +65,7 @@ function ToastList({ toasts, remove }: { toasts: Toast[]; remove: (id: number) =
 type AuthState = 'loading' | 'first_run' | 'unauthenticated' | 'authenticated';
 
 export default function App() {
-  const { view, setUser } = useStore();
+  const { view, setView, setUser } = useStore();
   const [authState, setAuthState] = useState<AuthState>('loading');
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -100,8 +100,15 @@ export default function App() {
 
   useEffect(() => {
     checkAuth();
-    if (localStorage.getItem('theme') === 'light') {
+    const stored = localStorage.getItem('theme') ?? 'system';
+    if (stored === 'light') {
       document.documentElement.dataset.theme = 'light';
+    } else if (stored === 'dark') {
+      document.documentElement.dataset.theme = '';
+    } else {
+      // system: follow prefers-color-scheme
+      const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+      document.documentElement.dataset.theme = prefersLight ? 'light' : '';
     }
   }, [checkAuth]);
 
@@ -126,10 +133,10 @@ export default function App() {
           <div className="flex flex-col min-h-screen">
             <TopBar onAuthChange={checkAuth} />
             <main className="flex-1">
-              {view === 'library' && <LibraryPage />}
-              {view === 'upload' && <UploadPage />}
+              {(view === 'library' || view === 'upload') && <LibraryPage />}
               {view === 'settings' && <SettingsPage />}
             </main>
+            {view === 'upload' && <UploadPage onClose={() => setView('library')} />}
           </div>
         )}
 

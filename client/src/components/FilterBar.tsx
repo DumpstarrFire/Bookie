@@ -51,10 +51,16 @@ export default function FilterBar() {
     queryFn: () => api.getTags(),
   })
 
-  const hasActiveFilters =
-    filters.format !== '' || filters.tag !== '' || filters.sort !== 'author' || filters.order !== 'asc'
+  const { data: seriesList = [] } = useQuery<string[]>({
+    queryKey: ['series'],
+    queryFn: () => api.getSeries(),
+  })
 
-  const clearFilters = () => setFilters({ format: '', tag: '', sort: 'author', order: 'asc' })
+  const hasActiveFilters =
+    filters.format !== '' || filters.tag !== '' || filters.series !== '' ||
+    filters.sort !== 'author' || filters.order !== 'asc'
+
+  const clearFilters = () => setFilters({ format: '', tag: '', series: '', sort: 'author', order: 'asc' })
   const toggleOrder = () => setFilters({ order: filters.order === 'asc' ? 'desc' : 'asc' })
 
   const filterControls = (
@@ -74,21 +80,41 @@ export default function FilterBar() {
         <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
       </div>
 
-      {/* Tag */}
-      <div className="relative">
-        <select
-          value={filters.tag}
-          onChange={e => setFilters({ tag: e.target.value })}
-          className={selectCls}
-          aria-label="Filter by tag"
-        >
-          <option value="">All Tags</option>
-          {tags.map(t => (
-            <option key={t.id} value={t.name}>{t.name} ({t.book_count})</option>
-          ))}
-        </select>
-        <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
-      </div>
+      {/* Tag — only shown when tags exist */}
+      {tags.length > 0 && (
+        <div className="relative">
+          <select
+            value={filters.tag}
+            onChange={e => setFilters({ tag: e.target.value })}
+            className={selectCls}
+            aria-label="Filter by tag"
+          >
+            <option value="">All Tags</option>
+            {tags.map(t => (
+              <option key={t.id} value={t.name}>{t.name} ({t.book_count})</option>
+            ))}
+          </select>
+          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+        </div>
+      )}
+
+      {/* Series — only shown when series exist */}
+      {seriesList.length > 0 && (
+        <div className="relative">
+          <select
+            value={filters.series}
+            onChange={e => setFilters({ series: e.target.value })}
+            className={selectCls}
+            aria-label="Filter by series"
+          >
+            <option value="">All Series</option>
+            {seriesList.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+        </div>
+      )}
 
       {/* Sort */}
       <div className="relative">
@@ -132,8 +158,10 @@ export default function FilterBar() {
 
   return (
     <div className="sticky top-14 z-30 bg-surface border-b border-line px-4 py-2.5 flex flex-col gap-2">
-      {/* Search — always visible */}
-      <SearchBar />
+      {/* Search — mobile only (desktop search is in TopBar) */}
+      <div className="sm:hidden">
+        <SearchBar />
+      </div>
 
       <div className="flex items-center justify-between gap-3">
         {/* Mobile toggle */}

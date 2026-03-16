@@ -20,6 +20,7 @@ export default function LibraryPage() {
         q: filters.q || undefined,
         format: filters.format || undefined,
         tag: filters.tag || undefined,
+        series: filters.series || undefined,
         sort: filters.sort,
         order: filters.order,
       }),
@@ -62,7 +63,7 @@ export default function LibraryPage() {
             <BookOpen className="w-16 h-16 opacity-30" />
             <p className="text-base font-medium">No books found</p>
             <p className="text-sm">
-              {filters.q || filters.format || filters.tag
+              {filters.q || filters.format || filters.tag || filters.series
                 ? 'Try clearing your filters.'
                 : 'Upload some books to get started.'}
             </p>
