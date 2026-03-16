@@ -690,16 +690,16 @@ function AccountTab() {
             ))}
           </div>
         )}
-        {/* Stacked form: label on top, email below, Add Email button */}
-        <div className="space-y-2">
+        {/* Fields side-by-side on sm+, stacked on mobile, then Add Email button */}
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
-            className="field w-full"
+            className="field flex-1"
             placeholder="Label (e.g. Kindle)"
             value={newEmailLabel}
             onChange={e => setNewEmailLabel(e.target.value)}
           />
           <input
-            className="field w-full"
+            className="field flex-1"
             type="email"
             placeholder="email@example.com"
             value={newEmail}
@@ -707,7 +707,7 @@ function AccountTab() {
             onKeyDown={e => e.key === 'Enter' && newEmail.trim() && addEmailMutation.mutate()}
           />
           <button
-            className="btn-primary w-full"
+            className="btn-primary shrink-0"
             onClick={() => addEmailMutation.mutate()}
             disabled={!newEmail.trim() || addEmailMutation.isPending}
           >
