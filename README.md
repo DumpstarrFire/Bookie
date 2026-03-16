@@ -2,6 +2,10 @@
 
 Bookie is a stupidly simple eBook management, designed for those who only need to organize books and send files to their eReader.
 
+> [!NOTE]
+> Yes, I did build this with Claude. <img width="16px" alt="bookie-ui" src="https://github.com/user-attachments/assets/65e5a331-3668-420f-8339-64c666e9af72" />
+
+
 <img width="100%" alt="bookie-ui" src="https://github.com/user-attachments/assets/e0755ecb-c6f7-4ed3-b57e-337dd64876e7" />
 
 ## Features
