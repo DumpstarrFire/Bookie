@@ -24,11 +24,18 @@ export default function Dialog({ open, onClose, title, children, footer, wide = 
 
   useEffect(() => {
     if (open) {
+      // Reserve the scrollbar gutter so sticky headers don't shift
+      const sw = window.innerWidth - document.documentElement.clientWidth
       document.body.style.overflow = 'hidden'
+      document.body.style.paddingRight = sw > 0 ? `${sw}px` : ''
     } else {
       document.body.style.overflow = ''
+      document.body.style.paddingRight = ''
     }
-    return () => { document.body.style.overflow = '' }
+    return () => {
+      document.body.style.overflow = ''
+      document.body.style.paddingRight = ''
+    }
   }, [open])
 
   if (!open) return null

@@ -5,15 +5,15 @@
 
 /* ─── Color tokens — dark (default) ─────────────────────────────────────── */
 :root {
-  --surface:      #111118;
-  --surface-card: #1a1a24;
-  --surface-raised:#21212e;
-  --surface-high: #28283a;
-  --ink:          #eaeaf6;
-  --ink-muted:    #9898b8;
-  --ink-faint:    #585870;
-  --line:         rgba(255,255,255,0.10);
-  --line-strong:  rgba(255,255,255,0.18);
+  --surface:      #16161e;
+  --surface-card: #1f1f2d;
+  --surface-raised:#272738;
+  --surface-high: #303048;
+  --ink:          #eeeef8;
+  --ink-muted:    #aaaacb;
+  --ink-faint:    #72728e;
+  --line:         rgba(255,255,255,0.11);
+  --line-strong:  rgba(255,255,255,0.20);
 }
 
 /* ─── Color tokens — light ───────────────────────────────────────────────── */
@@ -59,6 +59,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    scrollbar-gutter: stable;
   }
 
   body {
