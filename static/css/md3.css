@@ -1149,7 +1149,7 @@ textarea.field { resize: vertical; min-height: 80px; }
   .filter-bar {
     display: flex;
     flex-wrap: wrap;
-    padding: 8px 12px 10px;
+    padding: 8px 12px;
     gap: 6px;
     align-items: center;
   }
