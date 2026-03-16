@@ -320,18 +320,16 @@ select.filter-select {
 }
 .book-series-badge {
   position: absolute;
-  bottom: 48px;
-  left: 0;
-  right: 0;
-  background: rgba(0,0,0,.65);
+  top: 7px;
+  right: 7px;
+  background: rgba(0,0,0,.72);
   color: #fff;
-  font-size: 10px;
-  font-weight: 500;
-  padding: 3px 6px;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: var(--md-sys-shape-corner-full);
+  line-height: 1.2;
+  backdrop-filter: blur(2px);
 }
 .book-actions {
   flex-shrink: 0;
@@ -614,7 +612,7 @@ select.filter-select {
 .stat-value { font-size: 32px; font-weight: 400; color: var(--md-sys-color-primary); }
 .stat-label { font-size: 12px; color: var(--md-sys-color-on-surface-variant); letter-spacing: .5px; text-transform: uppercase; }
 
-/* ── Dialogs / Modals – bottom-anchored sheets ─────────── */
+/* ── Dialogs / Modals ──────────────────────────────────── */
 .dialog-scrim {
   position: fixed;
   inset: 0;
@@ -624,7 +622,7 @@ select.filter-select {
   align-items: flex-end;
   justify-content: center;
   padding: 0;
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(3px);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--md-sys-motion-duration-medium2);
@@ -649,19 +647,36 @@ select.filter-select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 24px 16px;
+  padding: 20px 24px 12px;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
 }
-.dialog-title { font-size: 24px; font-weight: 400; color: var(--md-sys-color-on-surface); }
-.dialog-body { padding: 0 24px; overflow-y: auto; flex: 1; }
+.dialog-title { font-size: 18px; font-weight: 500; color: var(--md-sys-color-on-surface); letter-spacing: .01em; }
+.dialog-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
 .dialog-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 20px 24px;
+  padding: 16px 24px;
   border-top: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
+}
+
+/* Desktop: centered modal */
+@media (min-width: 600px) {
+  .dialog-scrim {
+    align-items: center;
+    padding: 24px;
+  }
+  .dialog {
+    border-radius: var(--md-sys-shape-corner-extra-large);
+    transform: scale(0.96) translateY(8px);
+    box-shadow: 0 8px 40px rgba(0,0,0,.7);
+  }
+  .dialog-scrim.open .dialog {
+    transform: scale(1) translateY(0);
+  }
 }
 .dialog-footer-delete {
   color: var(--md-sys-color-error) !important;
@@ -767,6 +782,13 @@ textarea.field { resize: vertical; min-height: 80px; }
 .settings-content { flex: 1; min-width: 0; }
 .settings-tab-select { display: none; margin-bottom: 16px; }
 
+/* Desktop: cap settings content to ~50% viewport width */
+@media (min-width: 860px) {
+  .settings-content {
+    max-width: 600px;
+  }
+}
+
 /* ── Tag Management (settings) ─────────────────────────── */
 .tag-manage-row {
   display: flex;
@@ -789,47 +811,87 @@ textarea.field { resize: vertical; min-height: 80px; }
   background: rgba(208,188,255,.04);
 }
 
-/* ── Tag Chips (book dialog) ───────────────────────────── */
-.tag-input-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+/* ── Tag Chips ─────────────────────────────────────────── */
 .tag-chips-wrap {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  min-height: 28px;
+  min-height: 32px;
 }
 .tag-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px 3px 12px;
+  padding: 5px 12px;
   border-radius: var(--md-sys-shape-corner-full);
-  background: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface-variant);
+  border: 1px solid var(--md-sys-color-outline-variant);
   font-size: 13px;
   font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: background 150ms, color 150ms, border-color 150ms;
 }
-.tag-chip-remove {
+.tag-chip:hover {
+  background: var(--md-sys-color-surface-variant);
+  color: var(--md-sys-color-on-surface);
+  border-color: var(--md-sys-color-outline);
+}
+.tag-chip.active {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  border-color: transparent;
+}
+.tag-chip.active:hover {
+  filter: brightness(1.1);
+}
+.tag-empty-hint {
+  font-size: 13px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-style: italic;
+}
+
+/* ── Book Dialog Layout ───────────────────────────────── */
+.book-dialog-layout {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.book-dialog-cover-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.book-dialog-cover {
+  width: 160px;
+  height: 240px;
+  object-fit: cover;
+  border-radius: var(--md-sys-shape-corner-medium);
+  display: block;
+}
+.book-dialog-cover-placeholder {
+  width: 160px;
+  height: 240px;
+  background: var(--md-sys-color-surface-container-highest);
+  border-radius: var(--md-sys-shape-corner-medium);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0,0,0,.2);
-  color: inherit;
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  padding: 0;
-  font-family: inherit;
 }
-.tag-chip-remove:hover { background: rgba(0,0,0,.4); }
-.tag-add-input { font-size: 14px !important; padding: 8px 12px !important; }
+.book-dialog-fields {
+  flex: 1;
+  min-width: 200px;
+}
+.book-dialog-file-info {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  font-size: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.btn-sm { font-size: 12px !important; padding: 4px 10px !important; }
 
 /* ── Snackbar ──────────────────────────────────────────── */
 .snackbar {

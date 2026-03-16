@@ -267,8 +267,7 @@ function bookCard(b) {
   const cover = b.cover_filename
     ? `<img class="book-cover" src="/api/books/${b.id}/cover?thumb=true" alt="${esc(b.title)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="book-cover-placeholder" style="display:none">${svgBook()}</div>`
     : `<div class="book-cover-placeholder">${svgBook()}</div>`;
-  const seriesLabel = b.series ? esc(b.series) + (b.series_order != null ? ' #' + b.series_order : '') : '';
-  const seriesBadge = seriesLabel ? `<span class="book-series-badge">${seriesLabel}</span>` : '';
+  const seriesBadge = b.series_order != null ? `<span class="book-series-badge">#${b.series_order}</span>` : '';
   return `
   <div class="book-card" onclick="openBook(${b.id})">
     ${cover}
@@ -381,34 +380,35 @@ function exportLogs() {
 
 // ── Book Detail Dialog ───────────────────────────────────
 async function openBook(id) {
-  const book = await apiJSON(`/api/books/${id}`);
+  const [book, allTags] = await Promise.all([
+    apiJSON(`/api/books/${id}`),
+    apiJSON('/api/tags'),
+  ]);
   state.selectedBook = book;
 
-  document.getElementById('bookDialogTitle').textContent = book.title || 'Book Details';
+  document.getElementById('bookDialogTitle').textContent = 'Book Details';
 
   const cover = book.cover_filename
-    ? `<img src="/api/books/${id}/cover?t=${Date.now()}" alt="cover" style="width:180px;height:270px;object-fit:cover;border-radius:8px;flex-shrink:0">`
-    : `<div style="width:180px;height:270px;background:var(--md-sys-color-surface-container-highest);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${svgBook(56)}</div>`;
+    ? `<img src="/api/books/${id}/cover?t=${Date.now()}" alt="cover" class="book-dialog-cover">`
+    : `<div class="book-dialog-cover book-dialog-cover-placeholder">${svgBook(56)}</div>`;
 
-  const tagChips = (book.tags || []).map(t =>
-    `<span class="tag-chip">${esc(t)}<button class="tag-chip-remove" onclick="removeTagByName(${id},'${esc(t)}')" title="Remove tag">×</button></span>`
-  ).join('');
+  const bookTagNames = new Set(book.tags || []);
+  const tagChipsHtml = allTags.length
+    ? allTags.map(t =>
+        `<span class="tag-chip${bookTagNames.has(t.name) ? ' active' : ''}" data-tag-id="${t.id}" onclick="toggleBookTag(${id},${t.id},'${esc(t.name)}')">${esc(t.name)}</span>`
+      ).join('')
+    : `<span class="tag-empty-hint">No tags yet — add tags in Settings → File Organization</span>`;
 
-  const _dialogBodyEl = document.getElementById('bookDialogBody');
-  _dialogBodyEl.innerHTML = `
-  <div style="display:flex;gap:20px;padding-bottom:20px;flex-wrap:wrap">
-    <div style="display:flex;flex-direction:column;gap:8px;align-items:center;flex-shrink:0">
+  document.getElementById('bookDialogBody').innerHTML = `
+  <div class="book-dialog-layout">
+    <div class="book-dialog-cover-col">
       ${cover}
-      <button class="btn btn-text" style="font-size:12px;padding:4px 8px" onclick="openCoverDialog(${id})">Change Cover</button>
+      <button class="btn btn-text btn-sm" onclick="openCoverDialog(${id})">Change Cover</button>
     </div>
-    <div style="flex:1;min-width:200px">
+    <div class="book-dialog-fields">
       <div class="form-row">
-        <div class="form-field"><label>Title</label><input class="field" id="bTitle" value="${esc(book.title||'')}"></div>
         <div class="form-field"><label>Author</label><input class="field" id="bAuthor" value="${esc(book.author||'')}"></div>
-      </div>
-      <div class="form-row">
         <div class="form-field"><label>Published</label><input class="field" id="bPubDate" value="${esc(book.published_date||'')}"></div>
-        <div class="form-field"><label>Pages</label><input class="field" id="bPages" type="number" value="${book.page_count||''}"></div>
       </div>
       <div class="form-row">
         <div class="form-field"><label>Series</label><input class="field" id="bSeries" value="${esc(book.series||'')}"></div>
@@ -416,26 +416,13 @@ async function openBook(id) {
       </div>
       <div class="form-field">
         <label>Tags</label>
-        <div class="tag-input-row">
-          <div class="tag-chips-wrap" id="bookTagChips">${tagChips}</div>
-          <input class="field tag-add-input" id="bTagInput" type="text" placeholder="Add tag…" autocomplete="off">
-        </div>
+        <div class="tag-chips-wrap" id="bookTagChips">${tagChipsHtml}</div>
       </div>
     </div>
   </div>
-  <div style="padding:4px 0 16px;font-size:12px;color:var(--md-sys-color-on-surface-variant)">
-    File: ${esc(book.filename)} · ${formatBytes(book.file_size)} · Added ${fmtDate(book.date_added)}
+  <div class="book-dialog-file-info">
+    ${esc(book.filename)} · ${formatBytes(book.file_size)} · Added ${fmtDate(book.date_added)}
   </div>`;
-
-  // Tag input: add tag on Enter or comma
-  const tagInput = document.getElementById('bTagInput');
-  tagInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      const name = tagInput.value.trim().replace(/,/g, '');
-      if (name) { addTagToBook(id, name); tagInput.value = ''; }
-    }
-  });
 
   document.getElementById('bookDialogFooter').innerHTML = `
     <button class="btn btn-text dialog-footer-delete" onclick="deleteBook(${id})">Delete</button>
@@ -450,17 +437,11 @@ async function openBook(id) {
 
 async function saveBook(id) {
   const data = {
-    title: v('bTitle'), author: v('bAuthor'),
+    author: v('bAuthor'),
     published_date: v('bPubDate'),
-    page_count: parseInt(v('bPages')) || null,
     series: v('bSeries') || null,
     series_order: parseFloat(v('bSeriesOrder')) || null,
   };
-  // Add pending tag from input if any
-  const tagInput = document.getElementById('bTagInput');
-  if (tagInput && tagInput.value.trim()) {
-    await addTagToBook(id, tagInput.value.trim());
-  }
   await api(`/api/books/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   snack('Saved!');
   closeDialog('bookDialog');
@@ -525,7 +506,6 @@ function renderMetaResults(list) {
     const meta_line = [r.author, year].filter(Boolean).join(' · ');
     const detail_parts = [
       r.publisher ? esc(r.publisher) : null,
-      r.page_count ? `${r.page_count} pages` : null,
       r.rating ? `★ ${parseFloat(r.rating).toFixed(1)}` : null,
     ].filter(Boolean);
     const desc_snippet = r.description ? esc(r.description.slice(0, 120)) + (r.description.length > 120 ? '…' : '') : '';
@@ -582,34 +562,19 @@ function setTagFilter(name) {
   loadBooks();
 }
 
-async function addTagToBook(bookId, name) {
-  const res = await api(`/api/books/${bookId}/tags`, {
-    method: 'POST', body: JSON.stringify({ name }),
-  });
-  if (!res.ok) return;
+async function toggleBookTag(bookId, tagId, name) {
+  const chip = document.querySelector(`#bookTagChips .tag-chip[data-tag-id="${tagId}"]`);
+  const isActive = chip?.classList.contains('active');
+  if (isActive) {
+    const res = await api(`/api/books/${bookId}/tags/${tagId}`, { method: 'DELETE' });
+    if (res.ok) chip?.classList.remove('active');
+  } else {
+    const res = await api(`/api/books/${bookId}/tags`, { method: 'POST', body: JSON.stringify({ name }) });
+    if (res.ok) chip?.classList.add('active');
+  }
   const book = await apiJSON(`/api/books/${bookId}`);
   state.selectedBook = book;
-  _refreshBookTagChips(bookId, book.tags || []);
   loadTagFilter();
-}
-
-async function removeTagByName(bookId, name) {
-  const tags = await apiJSON('/api/tags');
-  const tag = tags.find(t => t.name === name);
-  if (!tag) return;
-  await api(`/api/books/${bookId}/tags/${tag.id}`, { method: 'DELETE' });
-  const updatedBook = await apiJSON(`/api/books/${bookId}`);
-  state.selectedBook = updatedBook;
-  _refreshBookTagChips(bookId, updatedBook.tags || []);
-  loadTagFilter();
-}
-
-function _refreshBookTagChips(bookId, tags) {
-  const chipsEl = document.getElementById('bookTagChips');
-  if (!chipsEl) return;
-  chipsEl.innerHTML = tags.map(t =>
-    `<span class="tag-chip">${esc(t)}<button class="tag-chip-remove" onclick="removeTagByName(${bookId},'${esc(t)}')" title="Remove">×</button></span>`
-  ).join('');
 }
 
 // ── Tag management (settings) ─────────────────────────────
