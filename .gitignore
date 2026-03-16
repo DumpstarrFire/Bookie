@@ -30,3 +30,7 @@ data/*.db-wal
 # OS
 .DS_Store
 Thumbs.db
+
+# Node
+client/node_modules/
+client/dist/
