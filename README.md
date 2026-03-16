@@ -14,6 +14,7 @@ Bookie is a stupidly simple eBook management, designed for those who only need t
 - PWA support
 - Dark & Light mode for the UI
 - Tagging (acts like shelves, but like complicated)
+- Series support
 
 ## Docker Compose
 
