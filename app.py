@@ -153,20 +153,34 @@ import covers as cover_mgr
 import mailer
 import renamer
 
-logging.basicConfig(level=logging.INFO)
+# Explicitly set root logger level — logging.basicConfig() is a no-op when
+# gunicorn or any imported library has already added handlers, so we set the
+# level directly to ensure INFO entries are always captured.
+logging.getLogger().setLevel(logging.INFO)
+
+# Silence chatty library loggers so DEBUG/INFO mode doesn't flood the buffer
+# with irrelevant framework noise.
+for _noisy_logger in ("werkzeug", "sqlalchemy.engine", "sqlalchemy.pool",
+                      "urllib3", "PIL", "asyncio"):
+    logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
-# In-memory log buffer (last 500 lines)
+# In-memory log buffer — keeps the last N lines so the Logs tab has something
+# to show.  Size is intentionally modest: even at DEBUG the suppressed library
+# loggers mean we only store app-level records.
+_LOG_BUFFER_CAPACITY = 500
+
 class _LogBuffer(logging.Handler):
-    def __init__(self, capacity=500):
+    def __init__(self, capacity: int = _LOG_BUFFER_CAPACITY):
         super().__init__()
-        self._buf = []
+        self._buf: list[str] = []
         self._cap = capacity
-    def emit(self, record):
+    def emit(self, record: logging.LogRecord) -> None:
         self._buf.append(self.format(record))
         if len(self._buf) > self._cap:
             self._buf = self._buf[-self._cap:]
-    def get_lines(self):
+    def get_lines(self) -> list[str]:
         return list(self._buf)
 
 _log_buffer = _LogBuffer()
@@ -202,6 +216,10 @@ def create_app():
         COVERS_DIR.mkdir(parents=True, exist_ok=True)
         db.create_all()
         _migrate_db(app)
+        # Restore persisted log level (defaults to INFO on first run)
+        _saved_level = (Settings.get("log_level") or "INFO").upper()
+        _saved_numeric = getattr(logging, _saved_level, logging.INFO)
+        logging.getLogger().setLevel(_saved_numeric)
 
     # Security headers
     @app.after_request
@@ -1060,6 +1078,7 @@ def create_app():
         "source_priority", "sources_disabled", "folder_organization",
         "rename_scheme", "rename_custom_template",
         "display_name",
+        "log_level",
     ]
 
     _MASKED = "••••••••"
@@ -1194,8 +1213,12 @@ def create_app():
     def set_log_level():
         data = request.get_json() or {}
         level = data.get("level", "INFO").upper()
+        _valid = {"DEBUG", "INFO", "WARNING", "ERROR"}
+        if level not in _valid:
+            return jsonify({"error": f"Invalid level; must be one of {sorted(_valid)}"}), 400
         numeric = getattr(logging, level, logging.INFO)
         logging.getLogger().setLevel(numeric)
+        Settings.set("log_level", level)
         return jsonify({"level": level})
 
     return app

@@ -534,10 +534,17 @@ function MetadataTab() {
 
 function LogsTab() {
   const { addToast } = useToast()
-  const [level, setLevel] = useState(() => localStorage.getItem('logLevel') || 'INFO')
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.getSettings })
+  const [level, setLevel] = useState('INFO')
   const [logs, setLogs] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const logRef = useRef<HTMLPreElement>(null)
+
+  // Sync level from persisted settings once loaded
+  useEffect(() => {
+    const saved = (settings as Record<string, string> | undefined)?.log_level
+    if (saved) setLevel(saved)
+  }, [(settings as Record<string, string> | undefined)?.log_level])
 
   async function loadLogs(lvl = level) {
     setLoading(true)
@@ -554,7 +561,7 @@ function LogsTab() {
   }
 
   async function changeLevel(lvl: string) {
-    setLevel(lvl); localStorage.setItem('logLevel', lvl)
+    setLevel(lvl)
     try { await api.setLogLevel(lvl) } catch { /* ignore */ }
     loadLogs(lvl)
   }
