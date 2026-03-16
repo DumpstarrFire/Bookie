@@ -42,7 +42,7 @@ function TagDropdown({ allTags, bookTags, onTagAdded, onTagRemoved }: TagDropdow
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
 
-  const label = bookTags.length === 0 ? 'None' : bookTags.length === 1 ? bookTags[0] : `${bookTags.length} selected`
+  const label = 'Add a Tag'
 
   const handleToggle = (tag: Tag) => {
     if (bookTags.includes(tag.name)) onTagRemoved(tag.id, tag.name)
@@ -56,7 +56,7 @@ function TagDropdown({ allTags, bookTags, onTagAdded, onTagRemoved }: TagDropdow
         onClick={() => setOpen(v => !v)}
         className="flex items-center justify-between gap-2 w-full px-3 py-2 rounded bg-surface-raised border border-line text-sm text-ink hover:border-line-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <span className={bookTags.length === 0 ? 'text-ink-muted' : ''}>{label}</span>
+        <span className="text-ink-muted">{label}</span>
         <ChevronDown size={14} className={`text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
