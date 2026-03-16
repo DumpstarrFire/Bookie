@@ -97,7 +97,7 @@ jobs:
             ${{ steps.dhub.outputs.image }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=beta
+            type=raw,value=beta,enable=${{ github.ref_name != github.event.repository.default_branch }}
             type=ref,event=pr
           labels: |
             org.opencontainers.image.title=bookie
