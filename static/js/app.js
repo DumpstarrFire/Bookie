@@ -236,8 +236,6 @@ async function loadBooks() {
   state.total = data.total || 0;
   state.pages = data.pages || 1;
 
-  document.getElementById('bookCount').textContent =
-    state.total === 1 ? '1 book' : `${state.total.toLocaleString()} books`;
 
   if (state.books.length === 0) {
     container.innerHTML = `
@@ -393,11 +391,22 @@ async function openBook(id) {
     : `<div class="book-dialog-cover book-dialog-cover-placeholder">${svgBook(56)}</div>`;
 
   const bookTagNames = new Set(book.tags || []);
-  const tagChipsHtml = allTags.length
-    ? allTags.map(t =>
-        `<span class="tag-chip${bookTagNames.has(t.name) ? ' active' : ''}" data-tag-id="${t.id}" onclick="toggleBookTag(${id},${t.id},'${esc(t.name)}')">${esc(t.name)}</span>`
-      ).join('')
-    : `<span class="tag-empty-hint">No tags yet — add tags in Settings → File Organization</span>`;
+
+  // Build compact tag multi-select options
+  const tagOptsHtml = allTags.length
+    ? allTags.map(t => {
+        const checked = bookTagNames.has(t.name);
+        return `<label class="tag-ms-opt${checked ? ' checked' : ''}">
+          <input type="checkbox" data-tag-id="${t.id}" data-tag-name="${esc(t.name)}"${checked ? ' checked' : ''}>
+          <span>${esc(t.name)}</span>
+        </label>`;
+      }).join('')
+    : `<span class="tag-empty-hint" style="padding:8px 12px;display:block">No tags yet — add in Settings → File Organization</span>`;
+
+  const selCount = bookTagNames.size;
+  const tagLabel = selCount === 0 ? 'None'
+    : selCount === 1 ? [...bookTagNames][0]
+    : `${selCount} selected`;
 
   document.getElementById('bookDialogBody').innerHTML = `
   <div class="book-dialog-layout">
@@ -406,6 +415,10 @@ async function openBook(id) {
       <button class="btn btn-text btn-sm" onclick="openCoverDialog(${id})">Change Cover</button>
     </div>
     <div class="book-dialog-fields">
+      <div class="form-field">
+        <label>Title</label>
+        <input class="field" id="bTitle" value="${esc(book.title||'')}">
+      </div>
       <div class="form-row">
         <div class="form-field"><label>Author</label><input class="field" id="bAuthor" value="${esc(book.author||'')}"></div>
         <div class="form-field"><label>Published</label><input class="field" id="bPubDate" value="${esc(book.published_date||'')}"></div>
@@ -416,7 +429,13 @@ async function openBook(id) {
       </div>
       <div class="form-field">
         <label>Tags</label>
-        <div class="tag-chips-wrap" id="bookTagChips">${tagChipsHtml}</div>
+        <div class="tag-multi-select" id="tagMultiSelect">
+          <button type="button" class="tag-ms-trigger" id="tagMsTrigger">
+            <span id="tagMsLabel">${esc(tagLabel)}</span>
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;flex-shrink:0"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+          <div class="tag-ms-panel" id="tagMsPanel">${tagOptsHtml}</div>
+        </div>
       </div>
     </div>
   </div>
@@ -431,12 +450,58 @@ async function openBook(id) {
       <button class="btn btn-filled" onclick="saveBook(${id})">Save</button>
     </div>`;
 
+  // Tag multi-select: toggle panel
+  document.getElementById('tagMsTrigger')?.addEventListener('click', e => {
+    e.stopPropagation();
+    document.getElementById('tagMsPanel')?.classList.toggle('open');
+  });
+
+  // Tag multi-select: close on outside click
+  function closeTagPanel(e) {
+    if (!document.getElementById('tagMultiSelect')?.contains(e.target)) {
+      document.getElementById('tagMsPanel')?.classList.remove('open');
+      document.removeEventListener('click', closeTagPanel);
+    }
+  }
+  document.addEventListener('click', closeTagPanel);
+
+  // Tag multi-select: checkbox changes → API calls
+  document.querySelectorAll('#tagMsPanel input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const tagId = parseInt(cb.dataset.tagId);
+      const tagName = cb.dataset.tagName;
+      if (cb.checked) {
+        const res = await api(`/api/books/${id}/tags`, { method: 'POST', body: JSON.stringify({ name: tagName }) });
+        if (!res.ok) { cb.checked = false; return; }
+        cb.closest('.tag-ms-opt')?.classList.add('checked');
+      } else {
+        const res = await api(`/api/books/${id}/tags/${tagId}`, { method: 'DELETE' });
+        if (!res.ok) { cb.checked = true; return; }
+        cb.closest('.tag-ms-opt')?.classList.remove('checked');
+      }
+      // Update trigger label
+      const checked = [...document.querySelectorAll('#tagMsPanel input:checked')];
+      const count = checked.length;
+      const labelEl = document.getElementById('tagMsLabel');
+      if (labelEl) {
+        labelEl.textContent = count === 0 ? 'None'
+          : count === 1 ? checked[0].dataset.tagName
+          : `${count} selected`;
+      }
+      // Keep state in sync
+      const refreshed = await apiJSON(`/api/books/${id}`);
+      state.selectedBook = refreshed;
+      loadTagFilter();
+    });
+  });
+
   openDialog('bookDialog');
   document.getElementById('bookDialogBody').scrollTop = 0;
 }
 
 async function saveBook(id) {
   const data = {
+    title: v('bTitle') || null,
     author: v('bAuthor'),
     published_date: v('bPubDate'),
     series: v('bSeries') || null,
@@ -562,20 +627,6 @@ function setTagFilter(name) {
   loadBooks();
 }
 
-async function toggleBookTag(bookId, tagId, name) {
-  const chip = document.querySelector(`#bookTagChips .tag-chip[data-tag-id="${tagId}"]`);
-  const isActive = chip?.classList.contains('active');
-  if (isActive) {
-    const res = await api(`/api/books/${bookId}/tags/${tagId}`, { method: 'DELETE' });
-    if (res.ok) chip?.classList.remove('active');
-  } else {
-    const res = await api(`/api/books/${bookId}/tags`, { method: 'POST', body: JSON.stringify({ name }) });
-    if (res.ok) chip?.classList.add('active');
-  }
-  const book = await apiJSON(`/api/books/${bookId}`);
-  state.selectedBook = book;
-  loadTagFilter();
-}
 
 // ── Tag management (settings) ─────────────────────────────
 async function loadTagManagement() {
@@ -1010,15 +1061,6 @@ async function uploadFile(file) {
     xhr.send(fd);
   });
 
-  // Auto-refresh library count after upload
-  if (result) {
-    document.getElementById('bookCount').textContent = '';
-    // Refresh library in background so count updates
-    apiJSON('/api/books?page=1&per_page=1').then(data => {
-      const total = data.total || 0;
-      document.getElementById('bookCount').textContent = total === 1 ? '1 book' : `${total.toLocaleString()} books`;
-    });
-  }
 }
 
 // ── Settings ─────────────────────────────────────────────
@@ -1362,11 +1404,25 @@ document.addEventListener('DOMContentLoaded', () => {
     openViewDropdown();
   });
 
+  // Search clear button
+  const searchClearBtn = document.getElementById('searchClearBtn');
+  searchClearBtn?.addEventListener('click', () => {
+    const searchInput = document.getElementById('searchInput');
+    searchInput.value = '';
+    searchClearBtn.style.display = 'none';
+    closeSearchDropdown();
+    state.filters.q = '';
+    state.page = 1;
+    loadBooks();
+    searchInput.focus();
+  });
+
   // Search (grid filter + live dropdown)
   let searchTimeout, liveSearchTimeout;
   const searchInput = document.getElementById('searchInput');
   searchInput.addEventListener('input', e => {
     const q = e.target.value.trim();
+    if (searchClearBtn) searchClearBtn.style.display = q ? '' : 'none';
     // Live dropdown (200ms debounce, min 2 chars)
     clearTimeout(liveSearchTimeout);
     if (q.length >= 2) {
