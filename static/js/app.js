@@ -201,6 +201,22 @@ function activateSettingsTab(target) {
   if (target === 'account') renderThemeSwatches();
 }
 
+function clearFilters() {
+  state.filters = { q: '', format: '', sort: 'title', order: 'asc' };
+  state.activeShelf = null;
+  state.page = 1;
+  const searchEl = document.getElementById('searchInput');
+  if (searchEl) searchEl.value = '';
+  const formatEl = document.getElementById('formatSelect');
+  if (formatEl) formatEl.value = '';
+  const sortEl = document.getElementById('sortSelect');
+  if (sortEl) sortEl.value = 'title';
+  const orderBtn = document.getElementById('orderToggle');
+  if (orderBtn) orderBtn.textContent = '↑ Asc';
+  loadBooks();
+  navigate('library');
+}
+
 // ── Books ────────────────────────────────────────────────
 async function loadBooks() {
   const container = document.getElementById('bookContainer');
@@ -215,6 +231,13 @@ async function loadBooks() {
   if (state.filters.q) params.set('q', state.filters.q);
   if (state.filters.format) params.set('format', state.filters.format);
   if (state.activeShelf) params.set('shelf_id', state.activeShelf.id);
+
+  // Show/hide clear filters button
+  const _cfBtn = document.getElementById('clearFiltersBtn');
+  if (_cfBtn) {
+    const hasFilter = state.filters.q || state.filters.format || state.activeShelf;
+    _cfBtn.style.display = hasFilter ? '' : 'none';
+  }
 
   const data = await apiJSON(`/api/books?${params}`);
   state.books = data.books || [];
@@ -403,6 +426,10 @@ async function openBook(id) {
         <div class="form-field"><label>Language</label><input class="field" id="bLanguage" value="${esc(book.language||'')}"></div>
         <div class="form-field"><label>Pages</label><input class="field" id="bPages" type="number" value="${book.page_count||''}"></div>
       </div>
+      <div class="form-row">
+        <div class="form-field"><label>Series</label><input class="field" id="bSeries" value="${esc(book.series||'')}"></div>
+        <div class="form-field"><label>Series #</label><input class="field" id="bSeriesOrder" type="number" step="0.1" value="${book.series_order??''}"></div>
+      </div>
       <div class="form-field"><label>Categories</label><input class="field" id="bCategories" value="${esc(book.categories||'')}"></div>
       <div class="form-field"><label>Description</label><textarea class="field" id="bDescription" rows="4">${esc(book.description||'')}</textarea></div>
     </div>
@@ -429,6 +456,8 @@ async function saveBook(id) {
     publisher: v('bPublisher'), published_date: v('bPubDate'),
     language: v('bLanguage'), page_count: parseInt(v('bPages')) || null,
     categories: v('bCategories'), description: v('bDescription'),
+    series: v('bSeries') || null,
+    series_order: parseFloat(v('bSeriesOrder')) || null,
   };
   await api(`/api/books/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   snack('Saved!');
@@ -473,7 +502,11 @@ async function searchMeta() {
   }
   document.getElementById('metaResults').innerHTML = '<div class="loading-indicator"><div class="spinner"></div></div>';
   const results = await apiJSON(`/api/metadata/search?q=${encodeURIComponent(q)}&sources=${sources.join(',')}`);
-  const list = Array.isArray(results) ? results : Object.values(results).flat();
+  if (!Array.isArray(results)) {
+    document.getElementById('metaResults').innerHTML = `<p style="color:var(--md-sys-color-error);padding:16px 0">${esc(results?.error || 'Search failed')}</p>`;
+    return;
+  }
+  const list = results;
   window._metaResultsList = list;
   renderMetaResults(list);
 }
@@ -527,11 +560,6 @@ async function selectMeta(i) {
   loadBooks();
 }
 
-async function applyMeta() {
-  // Kept for the Apply button as a fallback; selectMeta now auto-applies
-  snack('Click a result to import its metadata');
-}
-
 // ── Shelves ──────────────────────────────────────────────
 async function loadShelves() {
   const data = await apiJSON('/api/shelves');
@@ -545,17 +573,24 @@ async function loadShelves() {
     return;
   }
   grid.innerHTML = data.map(s => `
-    <div class="shelf-card" style="border-color:${s.color}" onclick="browseShelf(${s.id},'${esc(s.name)}')">
-      <div class="shelf-card-name">${esc(s.name)}${s.is_smart ? ' <span title="Smart shelf" style="font-size:14px">⚡</span>' : ''}</div>
-      <div class="shelf-card-count">${s.book_count} book${s.book_count !== 1 ? 's' : ''}</div>
-      ${s.description ? `<div style="font-size:12px;color:var(--md-sys-color-on-surface-variant);margin-top:4px">${esc(s.description)}</div>` : ''}
-      <div class="shelf-card-actions" onclick="event.stopPropagation()">
-        <button class="icon-btn" onclick="editShelf(${s.id})" title="Edit">
-          <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-        </button>
-        <button class="icon-btn" style="color:var(--md-sys-color-error)" onclick="deleteShelf(${s.id})" title="Delete">
-          <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-        </button>
+    <div class="shelf-card" onclick="browseShelf(${s.id},'${esc(s.name)}')">
+      <div class="shelf-card-accent" style="background:${s.color}"></div>
+      <div class="shelf-card-body">
+        <div class="shelf-card-top">
+          <div class="shelf-card-info">
+            <div class="shelf-card-name">${esc(s.name)}${s.is_smart ? ' <span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container);vertical-align:middle">⚡ Smart</span>' : ''}</div>
+            <div class="shelf-card-count">${s.book_count} book${s.book_count !== 1 ? 's' : ''}</div>
+            ${s.description ? `<div class="shelf-card-desc">${esc(s.description)}</div>` : ''}
+          </div>
+          <div class="shelf-card-actions" onclick="event.stopPropagation()">
+            <button class="icon-btn" onclick="editShelf(${s.id})" title="Edit">
+              <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            </button>
+            <button class="icon-btn" style="color:var(--md-sys-color-error)" onclick="deleteShelf(${s.id})" title="Delete">
+              <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </button>
+          </div>
+        </div>
       </div>
     </div>`).join('');
 }
@@ -663,20 +698,23 @@ async function deleteShelf(id) {
   loadShelves();
 }
 
-function openAddToShelf(bookId) {
+async function openAddToShelf(bookId) {
   state.addToShelfBookId = bookId;
+  openDialog('addToShelfDialog');
   const body = document.getElementById('addToShelfBody');
-  if (!state.shelves.length) {
+  body.innerHTML = '<p style="padding:16px 0;color:var(--md-sys-color-on-surface-variant)">Loading…</p>';
+  const shelves = await apiJSON('/api/shelves');
+  state.shelves = shelves;
+  if (!shelves.length) {
     body.innerHTML = '<p style="padding:16px 0;color:var(--md-sys-color-on-surface-variant)">No shelves yet. Create one in the Shelves tab first.</p>';
   } else {
-    body.innerHTML = state.shelves.map(s => `
+    body.innerHTML = shelves.map(s => `
       <label style="display:flex;align-items:center;gap:12px;padding:12px;cursor:pointer;border-radius:8px" onmouseover="this.style.background='rgba(208,188,255,.08)'" onmouseout="this.style.background=''">
         <input type="checkbox" value="${s.id}" style="width:18px;height:18px;accent-color:var(--md-sys-color-primary)">
         <span style="color:var(--md-sys-color-on-surface)">${esc(s.name)}</span>
         <span style="color:var(--md-sys-color-on-surface-variant);font-size:12px">${s.book_count} books</span>
       </label>`).join('');
   }
-  openDialog('addToShelfDialog');
 }
 
 async function confirmAddToShelf() {
@@ -700,12 +738,6 @@ async function sendToDefault(bookId) {
     return;
   }
   await executeSend(bookId, def.email, def.label);
-}
-
-// Small handler for card/list icon buttons — send to default or open picker
-async function handleCardSend(event, bookId) {
-  event.stopPropagation();
-  sendToDefault(bookId);
 }
 
 // Open the address picker dropdown anchored to `anchorEl` (or dialog if null)
@@ -1083,7 +1115,8 @@ async function uploadFile(file) {
       bar.style.width = '100%';
       bar.style.background = xhr.status < 300 ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-error)';
       if (xhr.status < 300) {
-        const d = JSON.parse(xhr.responseText);
+        let d;
+        try { d = JSON.parse(xhr.responseText); } catch { d = {}; }
         item.insertAdjacentHTML('beforeend', `<div style="font-size:12px;color:var(--md-sys-color-primary);margin-top:4px">✓ ${esc(d.title || d.filename)}</div>`);
         resolve(d);
       } else {
@@ -1215,13 +1248,6 @@ async function saveMeta() {
   snack('Metadata settings saved!');
 }
 
-async function saveFolder() {
-  await api('/api/settings', { method: 'PUT', body: JSON.stringify({
-    folder_organization: v('folderOrganization'),
-  })});
-  snack('Folder organisation saved!');
-}
-
 async function saveOrganization() {
   await api('/api/settings', { method: 'PUT', body: JSON.stringify({
     rename_scheme: v('renameScheme'),
@@ -1261,14 +1287,6 @@ async function sendTestEmail() {
     result.style.color = 'var(--md-sys-color-error)';
     result.textContent = '✗ ' + (data.error || 'Failed');
   }
-}
-
-async function saveRename() {
-  await api('/api/settings', { method: 'PUT', body: JSON.stringify({
-    rename_scheme: v('renameScheme'),
-    rename_custom_template: v('renameCustomTemplate'),
-  })});
-  snack('Naming scheme saved!');
 }
 
 async function bulkRenamePreview() {
@@ -1386,7 +1404,6 @@ function v(id) { return (document.getElementById(id) || {}).value || ''; }
 function setVal(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
 function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function svgBook(size=32) { return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" style="color:var(--md-sys-color-outline)"><path d="M18 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>`; }
-function coverPlaceholderSvg() { return `<div class=\\"book-cover-placeholder\\">${svgBook()}</div>`; }
 function formatBytes(n) { if (!n) return ''; if (n < 1024) return n + ' B'; if (n < 1048576) return (n/1024).toFixed(1) + ' KB'; return (n/1048576).toFixed(1) + ' MB'; }
 function fmtDate(s) { if (!s) return ''; return new Date(s).toLocaleDateString(); }
 
@@ -1424,13 +1441,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Hover to expand nav rail (without pinning)
+  // Hover to expand nav rail (without pinning) — delayed 2 s
+  let _navHoverTimer = null;
   navRail.addEventListener('mouseenter', () => {
     if (!navRail.classList.contains('pinned')) {
-      navRail.classList.add('expanded');
+      _navHoverTimer = setTimeout(() => {
+        if (!navRail.classList.contains('pinned')) navRail.classList.add('expanded');
+      }, 2000);
     }
   });
   navRail.addEventListener('mouseleave', () => {
+    clearTimeout(_navHoverTimer);
     if (!navRail.classList.contains('pinned')) {
       navRail.classList.remove('expanded');
     }
@@ -1538,6 +1559,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Clear filters button
+  const _clearFiltersBtn = document.getElementById('clearFiltersBtn');
+  if (_clearFiltersBtn) _clearFiltersBtn.addEventListener('click', clearFilters);
+
   // Dialog close buttons
   document.getElementById('closeBookDialog').addEventListener('click', () => closeDialog('bookDialog'));
   document.getElementById('closeMetaDialog').addEventListener('click', () => closeDialog('metaDialog'));
@@ -1569,7 +1594,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Metadata dialog
   document.getElementById('metaSearchBtn').addEventListener('click', searchMeta);
   document.getElementById('metaQuery').addEventListener('keydown', e => { if (e.key === 'Enter') searchMeta(); });
-  document.getElementById('applyMetaBtn').addEventListener('click', applyMeta);
+  document.getElementById('applyMetaBtn').addEventListener('click', () => snack('Click a result to import its metadata'));
 
   // Metadata source chips: toggle active state and re-filter displayed results
   document.getElementById('metaSourceChips')?.addEventListener('click', e => {

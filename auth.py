@@ -121,8 +121,8 @@ def register_auth_routes(app, Settings):
         data = request.get_json(force=True) or {}
         current = data.get("current_password", "")
         new_pass = data.get("new_password", "")
-        username = data.get("username") or session.get("username", "")
-        if not check_credentials(session.get("username", ""), current, Settings):
+        username = session.get("username", "")
+        if not check_credentials(username, current, Settings):
             return jsonify({"error": "Current password incorrect"}), 403
         if len(new_pass) < 6:
             return jsonify({"error": "Password must be at least 6 characters"}), 400

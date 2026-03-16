@@ -1,12 +1,11 @@
 """Bookie – Docker ebook manager with Material Design 3 UI."""
-import base64
-import hashlib
 import io
 import json
 import os
 import re
 import secrets
 import logging
+import stat
 import zipfile
 import xml.etree.ElementTree as ET
 from datetime import timedelta, date
@@ -23,38 +22,8 @@ def _get_or_create_secret_key() -> str:
         return key_file.read_text().strip()
     key = secrets.token_hex(32)
     key_file.write_text(key)
+    key_file.chmod(stat.S_IRUSR | stat.S_IWUSR)
     return key
-
-
-# ---------------------------------------------------------------------------
-# API-key encryption (Fernet, key derived from app SECRET_KEY)
-# ---------------------------------------------------------------------------
-
-def _get_fernet():
-    from cryptography.fernet import Fernet
-    secret = _get_or_create_secret_key()
-    if isinstance(secret, str):
-        secret = secret.encode()
-    key = base64.urlsafe_b64encode(hashlib.sha256(secret).digest())
-    return Fernet(key)
-
-
-def _encrypt_api_key(value: str) -> str:
-    if not value:
-        return ""
-    try:
-        return _get_fernet().encrypt(value.encode()).decode()
-    except Exception:
-        return value  # fallback: store as-is
-
-
-def _decrypt_api_key(value: str) -> str:
-    if not value:
-        return ""
-    try:
-        return _get_fernet().decrypt(value.encode()).decode()
-    except Exception:
-        return value  # legacy unencrypted value
 
 
 # ---------------------------------------------------------------------------
@@ -104,11 +73,10 @@ def _extract_epub_metadata(path: Path) -> dict:
                 elif len(val) == 10 and isbn10 is None:
                     isbn10 = val
             elif "isbn" in scheme:
-                val2 = re.sub(r"[-\s]", "", val)
-                if val2.isdigit() and len(val2) == 13:
-                    isbn13 = val2
-                elif val2.isdigit() and len(val2) == 10:
-                    isbn10 = val2
+                if val.isdigit() and len(val) == 13:
+                    isbn13 = val
+                elif val.isdigit() and len(val) == 10:
+                    isbn10 = val
 
         # Creators: primary author is first without refine role or role=aut
         authors = []
@@ -448,7 +416,7 @@ def create_app():
         fields = [
             "title", "author", "isbn", "isbn13", "publisher", "published_date",
             "language", "description", "page_count", "categories", "rating",
-            "google_books_id", "goodreads_id",
+            "google_books_id", "goodreads_id", "series", "series_order",
         ]
         for f in fields:
             if f in data:
@@ -596,6 +564,7 @@ def create_app():
                 continue
             if apply:
                 try:
+                    original_filename = book.filename
                     old_parent = src.parent
                     current = src
                     if scheme != "original":
@@ -614,7 +583,7 @@ def create_app():
                                 folder.rmdir()
                     except Exception:
                         pass
-                    results.append({"id": book.id, "original": book.filename, "new": book.filename, "changed": True})
+                    results.append({"id": book.id, "original": original_filename, "new": book.filename, "changed": True})
                 except Exception as e:
                     errors.append({"id": book.id, "original": book.filename, "error": str(e)})
             else:
@@ -957,12 +926,12 @@ def create_app():
         if not recipient:
             return jsonify({"error": "No recipient email set. Add one in Settings → Account."}), 400
 
-        smtp_host = data.get("smtp_host") or Settings.get("smtp_host")
-        smtp_port = int(data.get("smtp_port") or Settings.get("smtp_port") or 587)
-        smtp_user = data.get("smtp_user") or Settings.get("smtp_user")
-        smtp_password = data.get("smtp_password") or Settings.get("smtp_password")
-        use_tls = str(data.get("use_tls", Settings.get("smtp_tls", "true"))).lower() == "true"
-        sender_email = data.get("sender_email") or Settings.get("smtp_sender") or smtp_user
+        smtp_host = Settings.get("smtp_host")
+        smtp_port = int(Settings.get("smtp_port") or 587)
+        smtp_user = Settings.get("smtp_user")
+        smtp_password = Settings.get("smtp_password")
+        use_tls = Settings.get("smtp_tls", "true").lower() == "true"
+        sender_email = Settings.get("smtp_sender") or smtp_user
 
         if not smtp_host or not smtp_user or not smtp_password:
             return jsonify({"error": "SMTP settings incomplete. Configure in Settings first."}), 400
@@ -989,10 +958,9 @@ def create_app():
 
     SETTINGS_KEYS = [
         "smtp_host", "smtp_port", "smtp_user", "smtp_password",
-        "smtp_tls", "smtp_sender", "kindle_email",
-        "auto_metadata", "default_metadata_source", "meta_replace_missing",
+        "smtp_tls", "smtp_sender",
+        "auto_metadata", "meta_replace_missing",
         "source_priority", "sources_disabled", "folder_organization",
-        "books_per_page", "default_view",
         "rename_scheme", "rename_custom_template",
     ]
 
@@ -1113,9 +1081,14 @@ def create_app():
         level = request.args.get("level", "").upper()
         lines = _log_buffer.get_lines()
         if level in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
-            rank = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3, "CRITICAL": 4}
-            min_rank = rank[level]
-            lines = [l for l in lines if any(l.find(lv) != -1 for lv, r in rank.items() if r >= min_rank)]
+            level_names = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+            min_num = getattr(logging, level, logging.DEBUG)
+            def _meets_level(line: str) -> bool:
+                for lname in level_names:
+                    if lname in line and getattr(logging, lname, 0) >= min_num:
+                        return True
+                return False
+            lines = [l for l in lines if _meets_level(l)]
         return jsonify({"logs": lines})
 
     @app.route("/api/logs/level", methods=["PUT"])

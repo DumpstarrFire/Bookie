@@ -219,7 +219,7 @@ def _parse_gr_row(row) -> dict | None:
             src = cover_el.get("src", "")
             # Strip size constraints to get largest available
             cover_url = re.sub(r"\._\w+_\.jpg", ".jpg", src)
-            cover_url = re.sub(r"SX\d+|SY\d+|CR\d+,\d+,\d+,\d+|_", "", cover_url)
+            cover_url = re.sub(r"SX\d+|SY\d+|CR\d+,\d+,\d+,\d+", "", cover_url)
         return {
             "source": "goodreads",
             "goodreads_id": gr_id,

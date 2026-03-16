@@ -162,7 +162,8 @@ def embed_cover_in_epub(epub_path: str, cover_data: bytes) -> bool:
         img.save(buf, "JPEG", quality=90)
         cover_jpeg = buf.getvalue()
 
-        tmp = tempfile.mktemp(suffix=".epub")
+        tmp_fd, tmp = tempfile.mkstemp(suffix=".epub")
+        os.close(tmp_fd)
         shutil.copy2(epub_path, tmp)
 
         with zipfile.ZipFile(tmp, "r") as zin:

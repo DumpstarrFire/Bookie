@@ -80,11 +80,6 @@ class Shelf(db.Model):
     rules = db.Column(db.Text, default="[]")
     combination = db.Column(db.String(8), default="all")
 
-    # Smart shelf fields
-    is_smart = db.Column(db.Boolean, default=False)
-    rules = db.Column(db.Text, default="[]")          # JSON array of rule objects
-    combination = db.Column(db.String(8), default="all")  # "all" (AND) or "any" (OR)
-
     shelf_books = db.relationship("ShelfBook", back_populates="shelf", cascade="all, delete-orphan")
 
     def to_dict(self, book_count=None):
