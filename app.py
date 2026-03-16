@@ -143,7 +143,7 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 
-from models import db, Book, Shelf, ShelfBook, Settings, EmailAddress
+from models import db, Book, Shelf, ShelfBook, Settings, EmailAddress, Tag, BookTag
 from auth import login_required, register_auth_routes
 import scraper
 import covers as cover_mgr
@@ -255,11 +255,31 @@ def create_app():
         lang = request.args.get("language")
         if lang:
             query = query.filter(Book.language == lang)
-        sort = request.args.get("sort", "date_added")
-        order = request.args.get("order", "desc")
-        col = getattr(Book, sort, None)
-        if col is not None:
-            query = query.order_by(col.desc() if order == "desc" else col.asc())
+        tag = request.args.get("tag")
+        if tag:
+            query = query.join(BookTag, BookTag.book_id == Book.id).join(Tag, Tag.id == BookTag.tag_id).filter(Tag.name == tag)
+        sort = request.args.get("sort", "author")
+        order = request.args.get("order", "asc")
+        if sort == "series":
+            # Sort nulls last, then by series name, then by series order
+            if order == "desc":
+                query = query.order_by(
+                    db.case((Book.series.is_(None), 1), else_=0).asc(),
+                    Book.series.desc(),
+                    db.case((Book.series_order.is_(None), 1), else_=0).asc(),
+                    Book.series_order.desc(),
+                )
+            else:
+                query = query.order_by(
+                    db.case((Book.series.is_(None), 1), else_=0).asc(),
+                    Book.series.asc(),
+                    db.case((Book.series_order.is_(None), 1), else_=0).asc(),
+                    Book.series_order.asc(),
+                )
+        else:
+            col = getattr(Book, sort, None)
+            if col is not None:
+                query = query.order_by(col.desc() if order == "desc" else col.asc())
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 40, type=int)
         paginated = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -414,9 +434,8 @@ def create_app():
         book = Book.query.get_or_404(book_id)
         data = request.get_json(force=True)
         fields = [
-            "title", "author", "isbn", "isbn13", "publisher", "published_date",
-            "language", "description", "page_count", "categories", "rating",
-            "google_books_id", "goodreads_id", "series", "series_order",
+            "title", "author", "published_date", "page_count",
+            "series", "series_order",
         ]
         for f in fields:
             if f in data:
@@ -740,6 +759,72 @@ def create_app():
         book = Book.query.get_or_404(book_id)
         cover_mgr.delete_cover(book_id)
         book.cover_filename = None
+        db.session.commit()
+        return jsonify({"success": True})
+
+    # -----------------------------------------------------------------------
+    # Tags
+    # -----------------------------------------------------------------------
+
+    @app.route("/api/tags", methods=["GET"])
+    @login_required
+    def list_tags():
+        tags = Tag.query.order_by(Tag.name).all()
+        return jsonify([t.to_dict() for t in tags])
+
+    @app.route("/api/tags", methods=["POST"])
+    @login_required
+    def create_tag():
+        data = request.get_json(force=True) or {}
+        name = (data.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "Name is required"}), 400
+        existing = Tag.query.filter_by(name=name).first()
+        if existing:
+            return jsonify(existing.to_dict()), 200
+        tag = Tag(name=name)
+        db.session.add(tag)
+        db.session.commit()
+        return jsonify(tag.to_dict()), 201
+
+    @app.route("/api/tags/<int:tag_id>", methods=["DELETE"])
+    @login_required
+    def delete_tag(tag_id):
+        tag = Tag.query.get_or_404(tag_id)
+        db.session.delete(tag)
+        db.session.commit()
+        return jsonify({"success": True})
+
+    @app.route("/api/books/<int:book_id>/tags", methods=["GET"])
+    @login_required
+    def list_book_tags(book_id):
+        Book.query.get_or_404(book_id)
+        bts = BookTag.query.filter_by(book_id=book_id).all()
+        return jsonify([bt.tag.to_dict() for bt in bts])
+
+    @app.route("/api/books/<int:book_id>/tags", methods=["POST"])
+    @login_required
+    def add_book_tag(book_id):
+        Book.query.get_or_404(book_id)
+        data = request.get_json(force=True) or {}
+        name = (data.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "Tag name required"}), 400
+        tag = Tag.query.filter_by(name=name).first()
+        if not tag:
+            tag = Tag(name=name)
+            db.session.add(tag)
+            db.session.flush()
+        if not BookTag.query.filter_by(book_id=book_id, tag_id=tag.id).first():
+            db.session.add(BookTag(book_id=book_id, tag_id=tag.id))
+        db.session.commit()
+        return jsonify(tag.to_dict()), 201
+
+    @app.route("/api/books/<int:book_id>/tags/<int:tag_id>", methods=["DELETE"])
+    @login_required
+    def remove_book_tag(book_id, tag_id):
+        bt = BookTag.query.filter_by(book_id=book_id, tag_id=tag_id).first_or_404()
+        db.session.delete(bt)
         db.session.commit()
         return jsonify({"success": True})
 
@@ -1155,6 +1240,8 @@ def _migrate_db(app):
         "ALTER TABLE shelves ADD COLUMN is_smart BOOLEAN DEFAULT 0",
         "ALTER TABLE shelves ADD COLUMN rules TEXT DEFAULT '[]'",
         "ALTER TABLE shelves ADD COLUMN combination TEXT DEFAULT 'all'",
+        "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)",
+        "CREATE TABLE IF NOT EXISTS book_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, book_id INTEGER REFERENCES books(id), tag_id INTEGER REFERENCES tags(id), UNIQUE(book_id, tag_id))",
     ]
     with app.app_context():
         with db.engine.connect() as conn:
@@ -1170,12 +1257,9 @@ def _apply_metadata(book: Book, meta: dict, replace_missing_only: bool = None):
     if replace_missing_only is None:
         replace_missing_only = Settings.get("meta_replace_missing", "true") == "true"
     field_map = {
-        "title": "title", "author": "author", "isbn": "isbn", "isbn13": "isbn13",
-        "publisher": "publisher", "published_date": "published_date",
-        "language": "language", "description": "description",
-        "page_count": "page_count", "categories": "categories",
-        "rating": "rating", "google_books_id": "google_books_id",
-        "goodreads_id": "goodreads_id",
+        "title": "title", "author": "author",
+        "published_date": "published_date",
+        "page_count": "page_count",
     }
     for src_key, model_key in field_map.items():
         val = meta.get(src_key)
