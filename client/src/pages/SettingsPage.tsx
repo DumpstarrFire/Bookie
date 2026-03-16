@@ -503,11 +503,11 @@ function MetadataTab() {
             </div>
           ))}
         </div>
+        <button className="btn-primary" onClick={() => saveSourcesMutation.mutate()} disabled={saveSourcesMutation.isPending}>
+          {saveSourcesMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          Save
+        </button>
       </section>
-      <button className="btn-primary" onClick={() => saveSourcesMutation.mutate()} disabled={saveSourcesMutation.isPending}>
-        {saveSourcesMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        Save Sources
-      </button>
     </div>
   )
 }
