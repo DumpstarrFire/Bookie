@@ -529,6 +529,53 @@ def create_app():
         db.session.commit()
         return jsonify({"success": True})
 
+    @app.route("/api/books/bulk-delete", methods=["POST"])
+    @login_required
+    def bulk_delete_books():
+        ids = (request.get_json(force=True) or {}).get("ids", [])
+        deleted = 0
+        for book_id in ids:
+            book = Book.query.get(book_id)
+            if not book:
+                continue
+            filepath = BOOKS_DIR / book.filename
+            parent = filepath.parent
+            if filepath.exists():
+                filepath.unlink()
+            try:
+                for folder in [parent, parent.parent]:
+                    if folder != BOOKS_DIR and folder.exists() and not any(folder.iterdir()):
+                        folder.rmdir()
+            except Exception:
+                pass
+            cover_mgr.delete_cover(book_id)
+            db.session.delete(book)
+            deleted += 1
+        db.session.commit()
+        return jsonify({"deleted": deleted})
+
+    @app.route("/api/books/bulk-tag", methods=["POST"])
+    @login_required
+    def bulk_add_tag():
+        data = request.get_json(force=True) or {}
+        ids = data.get("ids", [])
+        tag_name = (data.get("tag") or "").strip()
+        if not tag_name:
+            return jsonify({"error": "tag required"}), 400
+        tag = Tag.query.filter_by(name=tag_name).first()
+        if not tag:
+            tag = Tag(name=tag_name)
+            db.session.add(tag)
+            db.session.flush()
+        added = 0
+        for book_id in ids:
+            exists = BookTag.query.filter_by(book_id=book_id, tag_id=tag.id).first()
+            if not exists:
+                db.session.add(BookTag(book_id=book_id, tag_id=tag.id))
+                added += 1
+        db.session.commit()
+        return jsonify({"added": added, "tag": tag.to_dict()})
+
     @app.route("/api/books/<int:book_id>/download", methods=["GET"])
     @login_required
     def download_book(book_id):

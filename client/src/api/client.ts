@@ -83,6 +83,20 @@ export function deleteBook(id: number): Promise<void> {
   return api<void>(`/api/books/${id}`, { method: 'DELETE' })
 }
 
+export function bulkDeleteBooks(ids: number[]): Promise<{ deleted: number }> {
+  return api<{ deleted: number }>('/api/books/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  })
+}
+
+export function bulkAddTag(ids: number[], tag: string): Promise<{ added: number }> {
+  return api<{ added: number }>('/api/books/bulk-tag', {
+    method: 'POST',
+    body: JSON.stringify({ ids, tag }),
+  })
+}
+
 // ─── Series ───────────────────────────────────────────────────────────────────
 
 export function getSeries(): Promise<string[]> {
@@ -408,6 +422,8 @@ export default {
   getBook,
   updateBook,
   deleteBook,
+  bulkDeleteBooks,
+  bulkAddTag,
   // Tags
   getTags,
   getBookTags,

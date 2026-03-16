@@ -1,16 +1,15 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
 import { Search, AlertCircle } from 'lucide-react'
+import { useMutation } from '@tanstack/react-query'
 import * as api from '../api/client'
-import { Book, MetaResult } from '../types'
+import { MetaResult } from '../types'
 import Dialog from './Dialog'
 import Spinner from './Spinner'
 
 interface MetaDialogProps {
-  bookId: number
   bookTitle: string
   onClose: () => void
-  onApplied: (book: Book) => void
+  onApplied: (result: MetaResult) => void
 }
 
 function SourceBadge({ source }: { source: string }) {
@@ -22,43 +21,25 @@ function SourceBadge({ source }: { source: string }) {
   )
 }
 
-export default function MetaDialog({ bookId, bookTitle, onClose, onApplied }: MetaDialogProps) {
+export default function MetaDialog({ bookTitle, onClose, onApplied }: MetaDialogProps) {
   const [query, setQuery] = useState(bookTitle)
   const [results, setResults] = useState<MetaResult[] | null>(null)
-  const [applyingIndex, setApplyingIndex] = useState<number | null>(null)
-  const [applyError, setApplyError] = useState<string | null>(null)
 
   const searchMutation = useMutation({
     mutationFn: () => api.searchMeta(query.trim()),
-    onSuccess: (data) => {
-      setResults(data)
-    },
-  })
-
-  const applyMutation = useMutation({
-    mutationFn: (result: MetaResult) => api.applyMeta(bookId, result),
-    onSuccess: (book) => {
-      setApplyingIndex(null)
-      onApplied(book)
-    },
-    onError: () => {
-      setApplyingIndex(null)
-      setApplyError('Failed to apply metadata. Please try again.')
-    },
+    onSuccess: (data) => setResults(data),
   })
 
   const handleSearch = (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!query.trim()) return
     setResults(null)
-    setApplyError(null)
     searchMutation.mutate()
   }
 
-  const handleApply = (result: MetaResult, index: number) => {
-    setApplyingIndex(index)
-    setApplyError(null)
-    applyMutation.mutate(result)
+  const handleSelect = (result: MetaResult) => {
+    onApplied(result)
+    onClose()
   }
 
   return (
@@ -87,30 +68,17 @@ export default function MetaDialog({ bookId, bookTitle, onClose, onApplied }: Me
           </button>
         </form>
 
-        {/* Loading */}
         {searchMutation.isPending && (
-          <div className="flex justify-center py-10">
-            <Spinner size={28} />
-          </div>
+          <div className="flex justify-center py-10"><Spinner size={28} /></div>
         )}
 
-        {/* Search error */}
         {searchMutation.isError && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
             <AlertCircle size={16} />
-            Failed to search for metadata. Please try again.
+            Failed to search. Please try again.
           </div>
         )}
 
-        {/* Apply error */}
-        {applyError && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
-            <AlertCircle size={16} />
-            {applyError}
-          </div>
-        )}
-
-        {/* No results */}
         {results !== null && results.length === 0 && !searchMutation.isPending && (
           <div className="flex flex-col items-center gap-2 py-10 text-ink-muted">
             <Search size={28} className="opacity-40" />
@@ -118,84 +86,46 @@ export default function MetaDialog({ bookId, bookTitle, onClose, onApplied }: Me
           </div>
         )}
 
-        {/* Results */}
         {results !== null && results.length > 0 && (
           <div className="flex flex-col gap-2">
-            {results.map((result, i) => {
-              const isApplying = applyingIndex === i
-              const isAnyApplying = applyingIndex !== null
-
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => !isAnyApplying && handleApply(result, i)}
-                  disabled={isAnyApplying}
-                  className={[
-                    'group flex items-start gap-3 w-full p-3 rounded-lg text-left',
-                    'bg-surface-raised border border-line',
-                    'hover:border-accent/50 hover:bg-surface-high',
-                    'active:bg-surface-high',
-                    'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                    isAnyApplying && !isApplying ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-                  ].join(' ')}
-                >
-                  {/* Cover thumbnail */}
-                  <div className="shrink-0 w-12 h-[72px] rounded overflow-hidden bg-surface-high border border-line flex items-center justify-center">
-                    {result.cover_url ? (
-                      <img
-                        src={result.cover_url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        draggable={false}
-                        onError={e => {
-                          (e.target as HTMLImageElement).style.display = 'none'
-                        }}
-                      />
-                    ) : (
-                      <Search size={16} className="text-ink-faint" />
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0 flex flex-col gap-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-ink text-sm font-medium leading-snug line-clamp-2">
-                        {result.title ?? 'Unknown Title'}
-                      </p>
-                      <SourceBadge source={result.source} />
-                    </div>
-                    {result.author && (
-                      <p className="text-ink-muted text-xs truncate">{result.author}</p>
-                    )}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {result.published_date && (
-                        <span className="text-ink-faint text-xs">
-                          {result.published_date.slice(0, 4)}
-                        </span>
-                      )}
-                      {result.publisher && (
-                        <span className="text-ink-faint text-xs truncate">{result.publisher}</span>
-                      )}
-                      {result.isbn13 && (
-                        <span className="text-ink-faint text-xs font-mono">{result.isbn13}</span>
-                      )}
-                    </div>
-                    {result.description && (
-                      <p className="text-ink-muted text-xs line-clamp-2 mt-0.5">{result.description}</p>
-                    )}
-                  </div>
-
-                  {/* Apply indicator */}
-                  {isApplying && (
-                    <div className="shrink-0 flex items-center self-center">
-                      <Spinner size={16} />
-                    </div>
+            {results.map((result, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleSelect(result)}
+                className={[
+                  'group flex items-start gap-3 w-full p-3 rounded-lg text-left',
+                  'bg-surface-raised border border-line',
+                  'hover:border-accent/50 hover:bg-surface-high',
+                  'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer',
+                ].join(' ')}
+              >
+                <div className="shrink-0 w-12 h-[72px] rounded overflow-hidden bg-surface-high border border-line flex items-center justify-center">
+                  {result.cover_url ? (
+                    <img src={result.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" draggable={false}
+                      onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                  ) : (
+                    <Search size={16} className="text-ink-faint" />
                   )}
-                </button>
-              )
-            })}
+                </div>
+
+                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-ink text-sm font-medium leading-snug line-clamp-2">
+                      {result.title ?? 'Unknown Title'}
+                    </p>
+                    <SourceBadge source={result.source} />
+                  </div>
+                  {result.author && <p className="text-ink-muted text-xs truncate">{result.author}</p>}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {result.published_date && <span className="text-ink-faint text-xs">{result.published_date.slice(0, 4)}</span>}
+                    {result.publisher && <span className="text-ink-faint text-xs truncate">{result.publisher}</span>}
+                    {result.isbn13 && <span className="text-ink-faint text-xs font-mono">{result.isbn13}</span>}
+                  </div>
+                  {result.description && <p className="text-ink-muted text-xs line-clamp-2 mt-0.5">{result.description}</p>}
+                </div>
+              </button>
+            ))}
           </div>
         )}
       </div>

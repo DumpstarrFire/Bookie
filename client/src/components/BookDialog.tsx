@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { BookOpen, Trash2, Save, Image, ChevronDown, Check, AlertCircle } from 'lucide-react'
-
 import * as api from '../api/client'
-import { Book, Tag } from '../types'
+import { Book, Tag, MetaResult } from '../types'
 import Dialog from './Dialog'
 import MetaDialog from './MetaDialog'
 import CoverDialog from './CoverDialog'
@@ -22,15 +21,6 @@ function formatFileSize(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return ''
-  try {
-    return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-  } catch {
-    return iso
-  }
-}
-
 interface TagDropdownProps {
   bookId: number
   allTags: Tag[]
@@ -39,33 +29,24 @@ interface TagDropdownProps {
   onTagRemoved: (tagId: number, name: string) => void
 }
 
-function TagDropdown({ bookId, allTags, bookTags, onTagAdded, onTagRemoved }: TagDropdownProps) {
+function TagDropdown({ allTags, bookTags, onTagAdded, onTagRemoved }: TagDropdownProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
 
-  const label = bookTags.length === 0
-    ? 'None'
-    : bookTags.length === 1
-      ? bookTags[0]
-      : `${bookTags.length} selected`
+  const label = bookTags.length === 0 ? 'None' : bookTags.length === 1 ? bookTags[0] : `${bookTags.length} selected`
 
   const handleToggle = (tag: Tag) => {
-    if (bookTags.includes(tag.name)) {
-      onTagRemoved(tag.id, tag.name)
-    } else {
-      onTagAdded(tag.name)
-    }
+    if (bookTags.includes(tag.name)) onTagRemoved(tag.id, tag.name)
+    else onTagAdded(tag.name)
   }
 
   return (
@@ -73,12 +54,7 @@ function TagDropdown({ bookId, allTags, bookTags, onTagAdded, onTagRemoved }: Ta
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className={[
-          'flex items-center justify-between gap-2 w-full px-3 py-2 rounded',
-          'bg-surface-raised border border-line text-sm text-ink',
-          'hover:border-line-strong transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        ].join(' ')}
+        className="flex items-center justify-between gap-2 w-full px-3 py-2 rounded bg-surface-raised border border-line text-sm text-ink hover:border-line-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span className={bookTags.length === 0 ? 'text-ink-muted' : ''}>{label}</span>
         <ChevronDown size={14} className={`text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -92,16 +68,9 @@ function TagDropdown({ bookId, allTags, bookTags, onTagAdded, onTagRemoved }: Ta
             allTags.map(tag => {
               const checked = bookTags.includes(tag.name)
               return (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => handleToggle(tag)}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-ink hover:bg-surface-high transition-colors"
-                >
-                  <span className={[
-                    'flex items-center justify-center w-4 h-4 rounded border shrink-0',
-                    checked ? 'bg-accent border-accent' : 'border-line-strong',
-                  ].join(' ')}>
+                <button key={tag.id} type="button" onClick={() => handleToggle(tag)}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-ink hover:bg-surface-high transition-colors">
+                  <span className={['flex items-center justify-center w-4 h-4 rounded border shrink-0', checked ? 'bg-accent border-accent' : 'border-line-strong'].join(' ')}>
                     {checked && <Check size={10} strokeWidth={3} className="text-white" />}
                   </span>
                   <span className="flex-1 text-left truncate">{tag.name}</span>
@@ -119,7 +88,6 @@ function TagDropdown({ bookId, allTags, bookTags, onTagAdded, onTagRemoved }: Ta
 export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProps) {
   const qc = useQueryClient()
 
-
   const { data: book, isLoading, isError } = useQuery<Book>({
     queryKey: ['book', bookId],
     queryFn: () => api.getBook(bookId),
@@ -130,12 +98,19 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
     queryFn: () => api.getTags(),
   })
 
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+    staleTime: 60_000,
+  })
+
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
   const [publishedDate, setPublishedDate] = useState('')
   const [series, setSeries] = useState('')
   const [seriesOrder, setSeriesOrder] = useState('')
   const [imgError, setImgError] = useState(false)
+  const [metaCoverUrl, setMetaCoverUrl] = useState<string | null>(null)
   const [showMetaDialog, setShowMetaDialog] = useState(false)
   const [showCoverDialog, setShowCoverDialog] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -153,13 +128,20 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
   }, [book])
 
   const saveMutation = useMutation({
-    mutationFn: () => api.updateBook(bookId, {
-      title: title || null,
-      author: author || null,
-      published_date: publishedDate || null,
-      series: series || null,
-      series_order: seriesOrder !== '' ? Number(seriesOrder) : null,
-    }),
+    mutationFn: async () => {
+      const updated = await api.updateBook(bookId, {
+        title: title || null,
+        author: author || null,
+        published_date: publishedDate || null,
+        series: series || null,
+        series_order: seriesOrder !== '' ? Number(seriesOrder) : null,
+      })
+      // Apply cover from metadata if setting enabled and a cover URL is pending
+      if (metaCoverUrl && settings?.apply_meta_cover !== 'false') {
+        await api.setCoverFromUrl(bookId, metaCoverUrl).catch(() => {})
+      }
+      return updated
+    },
     onSuccess: (updated) => {
       qc.setQueryData(['book', bookId], updated)
       qc.invalidateQueries({ queryKey: ['books'] })
@@ -194,23 +176,20 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
   })
 
   const handleDelete = () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true)
-      return
-    }
+    if (!confirmDelete) { setConfirmDelete(true); return }
     deleteMutation.mutate()
   }
 
-  const coverUrl = book?.cover_filename && !imgError
-    ? `/api/books/${bookId}/cover`
-    : null
+  // Show metaCoverUrl preview if available, otherwise stored cover
+  const coverUrl = metaCoverUrl
+    ? metaCoverUrl
+    : (book?.cover_filename && !imgError ? `/api/books/${bookId}/cover` : null)
 
   const isSaving = saveMutation.isPending
   const isDeleting = deleteMutation.isPending
 
   const footer = (
     <div className="flex items-center justify-between gap-3">
-      {/* Delete */}
       <button
         type="button"
         onClick={handleDelete}
@@ -219,16 +198,13 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
         className={[
           'flex items-center gap-1.5 px-3 py-2 rounded text-sm font-medium',
           'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger',
-          confirmDelete
-            ? 'bg-danger text-white hover:bg-danger/80'
-            : 'text-danger border border-danger/40 hover:bg-danger/10',
+          confirmDelete ? 'bg-danger text-white hover:bg-danger/80' : 'text-danger border border-danger/40 hover:bg-danger/10',
         ].join(' ')}
       >
         {isDeleting ? <Spinner size={14} /> : <Trash2 size={14} />}
         {confirmDelete ? 'Confirm Delete' : 'Delete'}
       </button>
 
-      {/* Right side actions */}
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -254,9 +230,7 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
     <>
       <Dialog open onClose={onClose} title="Book Details" footer={footer} wide>
         {isLoading && (
-          <div className="flex items-center justify-center py-16">
-            <Spinner size={32} />
-          </div>
+          <div className="flex items-center justify-center py-16"><Spinner size={32} /></div>
         )}
 
         {isError && (
@@ -275,7 +249,7 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
                   <img
                     src={coverUrl}
                     alt={book.title ?? book.filename}
-                    onError={() => setImgError(true)}
+                    onError={() => { if (!metaCoverUrl) setImgError(true) }}
                     className="w-full h-full object-cover"
                     draggable={false}
                   />
@@ -283,7 +257,9 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
                   <BookOpen size={40} className="text-ink-faint" />
                 )}
               </div>
-
+              {metaCoverUrl && (
+                <p className="text-[10px] text-accent text-center">Cover from metadata (save to apply)</p>
+              )}
               <button
                 type="button"
                 onClick={() => setShowCoverDialog(true)}
@@ -296,79 +272,40 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
 
             {/* Fields column */}
             <div className="flex-1 min-w-0 flex flex-col gap-4">
-              {/* Title */}
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-ink-muted uppercase tracking-wide">Title</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  placeholder="Unknown title"
-                  className="field"
-                />
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Unknown title" className="field" />
               </div>
 
-              {/* Author + Published Date */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-ink-muted uppercase tracking-wide">Author</label>
-                  <input
-                    type="text"
-                    value={author}
-                    onChange={e => setAuthor(e.target.value)}
-                    placeholder="Unknown author"
-                    className="field"
-                  />
+                  <input type="text" value={author} onChange={e => setAuthor(e.target.value)} placeholder="Unknown author" className="field" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-ink-muted uppercase tracking-wide">Published Date</label>
-                  <input
-                    type="text"
-                    value={publishedDate}
-                    onChange={e => setPublishedDate(e.target.value)}
-                    placeholder="YYYY-MM-DD"
-                    className="field"
-                  />
+                  <input type="text" value={publishedDate} onChange={e => setPublishedDate(e.target.value)} placeholder="YYYY-MM-DD" className="field" />
                 </div>
               </div>
 
-              {/* Series + Series Order */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2 flex flex-col gap-1">
                   <label className="text-xs font-medium text-ink-muted uppercase tracking-wide">Series</label>
-                  <input
-                    type="text"
-                    value={series}
-                    onChange={e => setSeries(e.target.value)}
-                    placeholder="Series name"
-                    className="field"
-                  />
+                  <input type="text" value={series} onChange={e => setSeries(e.target.value)} placeholder="Series name" className="field" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-ink-muted uppercase tracking-wide">Order</label>
-                  <input
-                    type="number"
-                    value={seriesOrder}
-                    onChange={e => setSeriesOrder(e.target.value)}
-                    placeholder="—"
-                    min={0}
-                    step={0.1}
-                    className="field"
-                  />
+                  <input type="number" value={seriesOrder} onChange={e => setSeriesOrder(e.target.value)} placeholder="—" min={0} step={0.1} className="field" />
                 </div>
               </div>
 
-              {/* Tags */}
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-ink-muted uppercase tracking-wide">Tags</label>
                 <TagDropdown
-                  bookId={bookId}
-                  allTags={allTags}
-                  bookTags={book.tags}
+                  bookId={bookId} allTags={allTags} bookTags={book.tags}
                   onTagAdded={name => addTagMutation.mutate(name)}
                   onTagRemoved={tagId => removeTagMutation.mutate(tagId)}
                 />
-                {/* Selected tags display */}
                 {book.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {book.tags.map(tag => {
@@ -376,14 +313,8 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
                       return (
                         <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-accent-muted text-accent text-xs font-medium">
                           {tag}
-                          <button
-                            type="button"
-                            onClick={() => tagObj && removeTagMutation.mutate(tagObj.id)}
-                            className="hover:text-white transition-colors"
-                            aria-label={`Remove tag ${tag}`}
-                          >
-                            ×
-                          </button>
+                          <button type="button" onClick={() => tagObj && removeTagMutation.mutate(tagObj.id)}
+                            className="hover:text-white transition-colors" aria-label={`Remove tag ${tag}`}>×</button>
                         </span>
                       )
                     })}
@@ -391,7 +322,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
                 )}
               </div>
 
-              {/* Save error */}
               {saveMutation.isError && (
                 <div className="flex items-center gap-2 text-xs text-danger">
                   <AlertCircle size={12} />
@@ -402,12 +332,11 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
           </div>
         )}
 
-        {/* File info bar */}
+        {/* File info bar — filename + size only */}
         {book && (
           <div className="mx-5 mb-5 px-3 py-2 rounded-lg bg-surface-raised border border-line flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
             <span className="truncate font-mono flex-1 min-w-0">{book.filename}</span>
             <span>{formatFileSize(book.file_size)}</span>
-            {book.date_added && <span>Added {formatDate(book.date_added)}</span>}
           </div>
         )}
       </Dialog>
@@ -421,6 +350,7 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
           onClose={() => {
             setShowCoverDialog(false)
             setImgError(false)
+            setMetaCoverUrl(null)
             qc.invalidateQueries({ queryKey: ['book', bookId] })
           }}
         />
@@ -428,19 +358,15 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
 
       {showMetaDialog && book && (
         <MetaDialog
-          bookId={bookId}
           bookTitle={book.title ?? book.filename}
           onClose={() => setShowMetaDialog(false)}
-          onApplied={(updated) => {
-            qc.setQueryData(['book', bookId], updated)
-            qc.invalidateQueries({ queryKey: ['books'] })
-            setTitle(updated.title ?? '')
-            setAuthor(updated.author ?? '')
-            setPublishedDate(updated.published_date ?? '')
-            setSeries(updated.series ?? '')
-            setSeriesOrder(updated.series_order != null ? String(updated.series_order) : '')
-            setImgError(false)
-            setShowMetaDialog(false)
+          onApplied={(result: MetaResult) => {
+            if (result.title) setTitle(result.title)
+            if (result.author) setAuthor(result.author)
+            if (result.published_date) setPublishedDate(result.published_date)
+            // Apply cover from metadata if setting is on (default: apply unless explicitly disabled)
+            const applyCover = settings?.apply_meta_cover !== 'false'
+            if (applyCover && result.cover_url) setMetaCoverUrl(result.cover_url)
           }}
         />
       )}

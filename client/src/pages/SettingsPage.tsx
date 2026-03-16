@@ -393,6 +393,7 @@ function MetadataTab() {
 
   const [autoMetadata, setAutoMetadata] = useState(false)
   const [metaReplaceMissing, setMetaReplaceMissing] = useState(true)
+  const [applyMetaCover, setApplyMetaCover] = useState(true)
   const [priority, setPriority] = useState<string[]>([])
   const [disabled, setDisabled] = useState<Set<string>>(new Set())
   const dragSrc = useRef<number | null>(null)
@@ -401,6 +402,7 @@ function MetadataTab() {
     if (settings) {
       setAutoMetadata((settings.auto_metadata ?? 'false') === 'true')
       setMetaReplaceMissing((settings.meta_replace_missing ?? 'true') === 'true')
+      setApplyMetaCover((settings.apply_meta_cover ?? 'true') !== 'false')
     }
   }, [settings])
 
@@ -416,7 +418,7 @@ function MetadataTab() {
   }, [srcData])
 
   const saveSettingsMutation = useMutation({
-    mutationFn: () => api.saveSettings({ auto_metadata: autoMetadata ? 'true' : 'false', meta_replace_missing: metaReplaceMissing ? 'true' : 'false' }),
+    mutationFn: () => api.saveSettings({ auto_metadata: autoMetadata ? 'true' : 'false', meta_replace_missing: metaReplaceMissing ? 'true' : 'false', apply_meta_cover: applyMetaCover ? 'true' : 'false' }),
     onSuccess: () => addToast('success', 'Saved'),
     onError: (e: Error) => addToast('error', e.message),
   })
@@ -449,6 +451,13 @@ function MetadataTab() {
           <div>
             <p className="text-sm text-ink">Only replace missing fields</p>
             <p className="text-xs text-ink-muted">Skip fields that already have values when importing metadata</p>
+          </div>
+        </label>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" checked={applyMetaCover} onChange={e => setApplyMetaCover(e.target.checked)} className="accent-accent w-4 h-4" />
+          <div>
+            <p className="text-sm text-ink">Apply cover image from metadata</p>
+            <p className="text-xs text-ink-muted">When saving metadata, also update the book cover from the search result</p>
           </div>
         </label>
         <button className="btn-primary" onClick={() => saveSettingsMutation.mutate()} disabled={saveSettingsMutation.isPending}>

@@ -39,6 +39,14 @@ interface StoreState extends PersistedPrefs {
   // Search query (convenience wrapper — also synced into filters.q)
   searchQuery: string
   setSearchQuery: (query: string) => void
+
+  // Mass selection
+  selectionMode: boolean
+  selectedBookIds: number[]
+  setSelectionMode: (mode: boolean) => void
+  toggleBookSelection: (id: number) => void
+  clearSelection: () => void
+  selectAllBooks: (ids: number[]) => void
 }
 
 // ─── Default filter state ─────────────────────────────────────────────────────
@@ -97,6 +105,18 @@ export const useStore = create<StoreState>()(
           filters: { ...state.filters, q: query },
           page: 1,
         })),
+
+      // Mass selection
+      selectionMode: false,
+      selectedBookIds: [],
+      setSelectionMode: (mode) => set({ selectionMode: mode, selectedBookIds: [] }),
+      toggleBookSelection: (id) => set((state) => ({
+        selectedBookIds: state.selectedBookIds.includes(id)
+          ? state.selectedBookIds.filter(i => i !== id)
+          : [...state.selectedBookIds, id],
+      })),
+      clearSelection: () => set({ selectedBookIds: [] }),
+      selectAllBooks: (ids) => set({ selectedBookIds: ids }),
     }),
     {
       name: 'bookie-prefs',

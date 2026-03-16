@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Grid2x2, List, SlidersHorizontal, ChevronDown, X } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Grid2x2, List, SlidersHorizontal, ChevronDown, X, CheckSquare, Tag as TagIcon, Trash2 } from 'lucide-react'
 import { useStore } from '../store'
 import * as api from '../api/client'
-import { Tag } from '../types'
+import { Tag, BooksResponse } from '../types'
 import SearchBar from './SearchBar'
 
 const FORMAT_OPTIONS = [
@@ -43,8 +43,14 @@ const selectCls = [
 ].join(' ')
 
 export default function FilterBar() {
-  const { filters, setFilters, viewMode, setViewMode, gridSize, setGridSize } = useStore()
+  const {
+    filters, page, setFilters, viewMode, setViewMode, gridSize, setGridSize,
+    selectionMode, selectedBookIds, setSelectionMode, clearSelection, selectAllBooks,
+  } = useStore()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [tagging, setTagging] = useState(false)
+  const qc = useQueryClient()
 
   const { data: tags = [] } = useQuery<Tag[]>({
     queryKey: ['tags'],
@@ -72,6 +78,107 @@ export default function FilterBar() {
       </div>
     )
   }
+
+  const handleBulkDelete = async () => {
+    if (selectedBookIds.length === 0) return
+    if (!window.confirm(`Delete ${selectedBookIds.length} book${selectedBookIds.length !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      await api.bulkDeleteBooks(selectedBookIds)
+      setSelectionMode(false)
+      qc.invalidateQueries({ queryKey: ['books'] })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleBulkTag = async (tagName: string) => {
+    if (!tagName || selectedBookIds.length === 0) return
+    setTagging(true)
+    try {
+      await api.bulkAddTag(selectedBookIds, tagName)
+      qc.invalidateQueries({ queryKey: ['books'] })
+      qc.invalidateQueries({ queryKey: ['tags'] })
+    } finally {
+      setTagging(false)
+    }
+  }
+
+  // ── Selection toolbar (replaces filters when selection mode is active) ─────
+  const selectionToolbar = (
+    <div className="flex items-center justify-between gap-3 w-full flex-wrap">
+      {/* Left: count + select controls */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm font-medium text-ink">
+          {selectedBookIds.length} selected
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            const booksData = qc.getQueryData<BooksResponse>(['books', filters, page])
+            if (booksData?.books) selectAllBooks(booksData.books.map(b => b.id))
+          }}
+          className="px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
+        >
+          Select All
+        </button>
+        <button
+          type="button"
+          onClick={clearSelection}
+          className="px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
+        >
+          Clear
+        </button>
+      </div>
+
+      {/* Right: actions + exit */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Assign tag */}
+        {tags.length > 0 && (
+          <div className="relative w-40">
+            <select
+              defaultValue=""
+              onChange={e => { if (e.target.value) handleBulkTag(e.target.value); e.target.value = '' }}
+              disabled={selectedBookIds.length === 0 || tagging}
+              className={`${selectCls} w-full`}
+              aria-label="Assign tag to selected books"
+            >
+              <option value="">
+                <TagIcon size={13} />
+                Assign Tag…
+              </option>
+              {tags.map(t => (
+                <option key={t.id} value={t.name}>{t.name}</option>
+              ))}
+            </select>
+            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+          </div>
+        )}
+
+        {/* Delete */}
+        <button
+          type="button"
+          onClick={handleBulkDelete}
+          disabled={selectedBookIds.length === 0 || deleting}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-red-500/40 bg-red-500/10 text-red-400 text-sm hover:bg-red-500/20 hover:border-red-500/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Trash2 size={13} />
+          Delete{selectedBookIds.length > 0 ? ` (${selectedBookIds.length})` : ''}
+        </button>
+
+        {/* Exit selection mode */}
+        <button
+          type="button"
+          onClick={() => setSelectionMode(false)}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
+          aria-label="Exit selection mode"
+        >
+          <X size={13} />
+          Exit
+        </button>
+      </div>
+    </div>
+  )
 
   const filterControls = (
     <div className="flex flex-wrap items-center gap-2">
@@ -170,77 +277,98 @@ export default function FilterBar() {
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        {/* Mobile toggle */}
-        <button
-          type="button"
-          onClick={() => setMobileOpen(v => !v)}
-          className="sm:hidden flex items-center gap-1.5 px-3 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          aria-expanded={mobileOpen}
-        >
-          <SlidersHorizontal size={14} />
-          Filters
-          {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
-        </button>
-
-        {/* Desktop: inline filters */}
-        <div className="hidden sm:flex flex-1 min-w-0">
-          {filterControls}
-        </div>
-
-        {/* Right: view mode + grid size */}
-        <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
-          {viewMode === 'grid' && (
-            <div className="relative">
-              <select
-                value={gridSize}
-                onChange={e => setGridSize(Number(e.target.value))}
-                className={selectCls}
-                aria-label="Grid size"
-              >
-                {GRID_SIZES.map(s => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
-            </div>
-          )}
-
-          {/* View mode toggle */}
-          <div className="flex items-stretch rounded border border-line overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setViewMode('grid')}
-              aria-label="Grid view"
-              aria-pressed={viewMode === 'grid'}
-              className={[
-                'px-2.5 py-1.5 transition-colors focus-visible:outline-none',
-                viewMode === 'grid'
-                  ? 'bg-surface-high text-ink'
-                  : 'bg-surface-raised text-ink-muted hover:text-ink',
-              ].join(' ')}
-            >
-              <Grid2x2 size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('list')}
-              aria-label="List view"
-              aria-pressed={viewMode === 'list'}
-              className={[
-                'px-2.5 py-1.5 transition-colors border-l border-line focus-visible:outline-none',
-                viewMode === 'list'
-                  ? 'bg-surface-high text-ink'
-                  : 'bg-surface-raised text-ink-muted hover:text-ink',
-              ].join(' ')}
-            >
-              <List size={15} />
-            </button>
+        {selectionMode ? (
+          // ── Selection mode: full-width toolbar ───────────────────────────
+          <div className="flex-1 min-w-0">
+            {selectionToolbar}
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Mobile toggle */}
+            <button
+              type="button"
+              onClick={() => setMobileOpen(v => !v)}
+              className="sm:hidden flex items-center gap-1.5 px-3 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-expanded={mobileOpen}
+            >
+              <SlidersHorizontal size={14} />
+              Filters
+              {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
+            </button>
+
+            {/* Desktop: inline filters */}
+            <div className="hidden sm:flex flex-1 min-w-0">
+              {filterControls}
+            </div>
+
+            {/* Right: select mode toggle + view mode + grid size */}
+            <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
+              {/* Enter selection mode */}
+              <button
+                type="button"
+                onClick={() => setSelectionMode(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                aria-label="Select books"
+                title="Select books"
+              >
+                <CheckSquare size={14} />
+                <span className="hidden sm:inline">Select</span>
+              </button>
+
+              {viewMode === 'grid' && (
+                <div className="relative">
+                  <select
+                    value={gridSize}
+                    onChange={e => setGridSize(Number(e.target.value))}
+                    className={selectCls}
+                    aria-label="Grid size"
+                  >
+                    {GRID_SIZES.map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+                </div>
+              )}
+
+              {/* View mode toggle */}
+              <div className="flex items-stretch rounded border border-line overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  aria-label="Grid view"
+                  aria-pressed={viewMode === 'grid'}
+                  className={[
+                    'px-2.5 py-1.5 transition-colors focus-visible:outline-none',
+                    viewMode === 'grid'
+                      ? 'bg-surface-high text-ink'
+                      : 'bg-surface-raised text-ink-muted hover:text-ink',
+                  ].join(' ')}
+                >
+                  <Grid2x2 size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  aria-label="List view"
+                  aria-pressed={viewMode === 'list'}
+                  className={[
+                    'px-2.5 py-1.5 transition-colors border-l border-line focus-visible:outline-none',
+                    viewMode === 'list'
+                      ? 'bg-surface-high text-ink'
+                      : 'bg-surface-raised text-ink-muted hover:text-ink',
+                  ].join(' ')}
+                >
+                  <List size={15} />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Mobile: collapsible filters */}
-      {mobileOpen && (
+      {/* Mobile: collapsible filters (only in normal mode) */}
+      {!selectionMode && mobileOpen && (
         <div className="sm:hidden pb-1">
           {filterControls}
         </div>
