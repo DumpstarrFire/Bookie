@@ -32,7 +32,7 @@ export default function BookListItem({ book, onClick }: BookListItemProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { selectionMode, selectedBookIds, toggleBookSelection, selectRangeBooks, lastSelectedId, visibleBookIds } = useStore()
+  const { selectionMode, selectedBookIds, toggleBookSelection, selectRangeBooks, lastSelectedId, visibleBookIds, setSearchQuery } = useStore()
 
   const coverUrl = book.cover_filename && !imgError
     ? `/api/books/${book.id}/cover`
@@ -121,7 +121,16 @@ export default function BookListItem({ book, onClick }: BookListItemProps) {
           {/* Title + Author */}
           <div className="flex-1 min-w-0 flex flex-col gap-0.5">
             <p className="text-ink text-sm font-medium leading-snug truncate">{book.title ?? book.filename}</p>
-            {book.author && <p className="text-ink-muted text-xs truncate">{book.author}</p>}
+            {book.author && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); setSearchQuery(book.author!) }}
+                className="text-ink-muted text-xs truncate text-left [@media(hover:hover)]:hover:text-accent [@media(hover:hover)]:hover:underline transition-colors"
+                title={`Filter by ${book.author}`}
+              >
+                {book.author}
+              </button>
+            )}
           </div>
 
           {/* Series */}

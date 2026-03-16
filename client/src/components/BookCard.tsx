@@ -16,7 +16,7 @@ export default function BookCard({ book, onClick }: BookCardProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { selectionMode, selectedBookIds, toggleBookSelection, selectRangeBooks, lastSelectedId, visibleBookIds } = useStore()
+  const { selectionMode, selectedBookIds, toggleBookSelection, selectRangeBooks, lastSelectedId, visibleBookIds, setSearchQuery } = useStore()
 
   const coverUrl = book.cover_filename && !imgError
     ? `/api/books/${book.id}/cover`
@@ -74,7 +74,7 @@ export default function BookCard({ book, onClick }: BookCardProps) {
           'cursor-pointer min-w-0',
           isSelected
             ? 'bg-accent/10 border-accent shadow-lg shadow-accent/20'
-            : 'bg-surface-card border-line hover:border-line-strong hover:shadow-lg hover:shadow-black/40 hover:scale-[1.02] active:scale-[0.98]',
+            : 'bg-surface-card border-line [@media(hover:hover)]:hover:border-line-strong [@media(hover:hover)]:hover:shadow-lg [@media(hover:hover)]:hover:shadow-black/40 [@media(hover:hover)]:hover:scale-[1.02] active:scale-[0.98]',
         ].join(' ')}
         aria-label={`${selectionMode ? 'Select' : 'Open'} ${book.title ?? book.filename}`}
       >
@@ -89,7 +89,7 @@ export default function BookCard({ book, onClick }: BookCardProps) {
                 <BookOpen size={32} className="text-ink-faint" />
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity duration-200" />
           </div>
 
           {seriesBadge && (
@@ -148,7 +148,16 @@ export default function BookCard({ book, onClick }: BookCardProps) {
           <p className="text-ink text-sm font-medium leading-snug line-clamp-2 min-h-[2.5em]" title={book.title ?? book.filename}>
             {book.title ?? book.filename}
           </p>
-          {book.author && <p className="text-ink-muted text-xs leading-snug truncate" title={book.author}>{book.author}</p>}
+          {book.author && (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); setSearchQuery(book.author!) }}
+              className="text-ink-muted text-xs leading-snug truncate text-left [@media(hover:hover)]:hover:text-accent [@media(hover:hover)]:hover:underline transition-colors"
+              title={`Filter by ${book.author}`}
+            >
+              {book.author}
+            </button>
+          )}
         </div>
       </div>
 

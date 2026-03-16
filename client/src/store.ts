@@ -8,6 +8,7 @@ interface PersistedPrefs {
   viewMode: 'grid' | 'list'
   gridSize: number
   settingsTab: string
+  perPage: number
 }
 
 // ─── Full store shape ─────────────────────────────────────────────────────────
@@ -28,6 +29,8 @@ interface StoreState extends PersistedPrefs {
   // Pagination
   page: number
   setPage: (page: number) => void
+  perPage: number
+  setPerPage: (perPage: number) => void
 
   // View preferences (persisted)
   setViewMode: (mode: 'grid' | 'list') => void
@@ -95,6 +98,8 @@ export const useStore = create<StoreState>()(
       // Pagination
       page: 1,
       setPage: (page) => set((state) => ({ page, lastSelectedId: state.selectionMode ? null : state.lastSelectedId })),
+      perPage: 40,
+      setPerPage: (perPage) => set({ perPage, page: 1 }),
 
       // View preferences (initial values — overridden by persisted storage)
       viewMode: 'grid',
@@ -147,6 +152,7 @@ export const useStore = create<StoreState>()(
         viewMode: state.viewMode,
         gridSize: state.gridSize,
         settingsTab: state.settingsTab,
+        perPage: state.perPage,
       }),
     },
   ),

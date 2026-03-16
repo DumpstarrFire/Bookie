@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, AlertCircle } from 'lucide-react'
+import { Search, AlertCircle, X, BookOpen } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import * as api from '../api/client'
 import { MetaResult } from '../types'
@@ -12,18 +12,10 @@ interface MetaDialogProps {
   onApplied: (result: MetaResult) => void
 }
 
-function SourceBadge({ source }: { source: string }) {
-  const label = source === 'google_books' ? 'Google Books' : source
-  return (
-    <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase bg-surface-high text-ink-muted border border-line">
-      {label}
-    </span>
-  )
-}
-
 export default function MetaDialog({ bookTitle, onClose, onApplied }: MetaDialogProps) {
   const [query, setQuery] = useState(bookTitle)
   const [results, setResults] = useState<MetaResult[] | null>(null)
+  const [previewResult, setPreviewResult] = useState<MetaResult | null>(null)
 
   const searchMutation = useMutation({
     mutationFn: () => api.searchMeta(query.trim()),
@@ -37,13 +29,18 @@ export default function MetaDialog({ bookTitle, onClose, onApplied }: MetaDialog
     searchMutation.mutate()
   }
 
-  const handleSelect = (result: MetaResult) => {
-    onApplied(result)
-    onClose()
+  const handleResultClick = (result: MetaResult) => {
+    const isTouchDevice = !window.matchMedia('(hover: hover)').matches
+    if (isTouchDevice) {
+      setPreviewResult(result)
+    } else {
+      onApplied(result)
+      onClose()
+    }
   }
 
   return (
-    <Dialog open onClose={onClose} title="Find Metadata" wide>
+    <Dialog open onClose={onClose} title="Fetch Metadata" wide>
       <div className="p-5 flex flex-col gap-4">
         {/* Search input */}
         <form onSubmit={handleSearch} className="flex gap-2">
@@ -92,7 +89,7 @@ export default function MetaDialog({ bookTitle, onClose, onApplied }: MetaDialog
               <button
                 key={i}
                 type="button"
-                onClick={() => handleSelect(result)}
+                onClick={() => handleResultClick(result)}
                 className={[
                   'group flex items-start gap-3 w-full p-3 rounded-lg text-left',
                   'bg-surface-raised border border-line',
@@ -110,12 +107,9 @@ export default function MetaDialog({ bookTitle, onClose, onApplied }: MetaDialog
                 </div>
 
                 <div className="flex-1 min-w-0 flex flex-col gap-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-ink text-sm font-medium leading-snug line-clamp-2">
-                      {result.title ?? 'Unknown Title'}
-                    </p>
-                    <SourceBadge source={result.source} />
-                  </div>
+                  <p className="text-ink text-sm font-medium leading-snug line-clamp-2">
+                    {result.title ?? 'Unknown Title'}
+                  </p>
                   {result.author && <p className="text-ink-muted text-xs truncate">{result.author}</p>}
                   <div className="flex items-center gap-2 flex-wrap">
                     {result.published_date && <span className="text-ink-faint text-xs">{result.published_date.slice(0, 4)}</span>}
@@ -129,6 +123,57 @@ export default function MetaDialog({ bookTitle, onClose, onApplied }: MetaDialog
           </div>
         )}
       </div>
+
+      {/* Mobile tap preview overlay */}
+      {previewResult && (
+        <div className="absolute inset-0 z-10 flex flex-col bg-surface rounded-b-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-line shrink-0">
+            <button
+              type="button"
+              onClick={() => setPreviewResult(null)}
+              className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink transition-colors"
+            >
+              <X size={16} />
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={() => { onApplied(previewResult); onClose() }}
+              className="btn-primary py-1.5 text-sm"
+            >
+              Use this
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+            {previewResult.cover_url ? (
+              <img
+                src={previewResult.cover_url}
+                alt={previewResult.title ?? ''}
+                className="w-32 h-48 object-cover rounded-lg border border-line mx-auto shadow-lg"
+                draggable={false}
+              />
+            ) : (
+              <div className="w-32 h-48 rounded-lg border border-line bg-surface-raised flex items-center justify-center mx-auto">
+                <BookOpen size={32} className="text-ink-faint" />
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2">
+              <h3 className="text-ink font-semibold text-base leading-snug">{previewResult.title ?? 'Unknown Title'}</h3>
+              {previewResult.author && <p className="text-ink-muted text-sm">{previewResult.author}</p>}
+              <div className="flex items-center gap-3 flex-wrap text-xs text-ink-faint">
+                {previewResult.published_date && <span>{previewResult.published_date.slice(0, 4)}</span>}
+                {previewResult.publisher && <span>{previewResult.publisher}</span>}
+                {previewResult.isbn13 && <span className="font-mono">{previewResult.isbn13}</span>}
+              </div>
+              {previewResult.description && (
+                <p className="text-ink-muted text-sm leading-relaxed mt-1">{previewResult.description}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Dialog>
   )
 }

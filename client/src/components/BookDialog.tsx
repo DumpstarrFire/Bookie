@@ -272,7 +272,7 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
           onClick={() => setShowMetaDialog(true)}
           className="px-3 py-2 rounded text-sm font-medium text-ink border border-line hover:bg-surface-raised transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          Find Metadata
+          Fetch Metadata
         </button>
         <button
           type="button"

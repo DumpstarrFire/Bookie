@@ -315,12 +315,19 @@ export default function FilterBar() {
             <button
               type="button"
               onClick={() => setMobileOpen(v => !v)}
-              className="sm:hidden flex items-center gap-1.5 px-3 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className={[
+                'sm:hidden relative flex items-center justify-center w-8 h-8 rounded border bg-surface-raised transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                hasActiveFilters
+                  ? 'border-accent text-accent'
+                  : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
+              ].join(' ')}
               aria-expanded={mobileOpen}
+              aria-label="Filters"
             >
               <SlidersHorizontal size={14} />
-              Filters
-              {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
+              {hasActiveFilters && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent border-2 border-surface" />
+              )}
             </button>
 
             {/* Desktop: inline filters */}
