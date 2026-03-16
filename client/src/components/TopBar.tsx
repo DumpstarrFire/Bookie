@@ -4,8 +4,10 @@ import {
   ChevronDown,
   Loader2,
   LogOut,
+  Moon,
   RefreshCw,
   Settings,
+  Sun,
   Upload,
   User,
 } from 'lucide-react';
@@ -22,7 +24,15 @@ export default function TopBar({ onAuthChange }: Props) {
   const { addToast } = useToast();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [lightMode, setLightMode] = useState(() => document.documentElement.dataset.theme === 'light');
   const menuRef = useRef<HTMLDivElement>(null);
+
+  function toggleTheme() {
+    const next = !lightMode;
+    setLightMode(next);
+    document.documentElement.dataset.theme = next ? 'light' : '';
+    localStorage.setItem('theme', next ? 'light' : 'dark');
+  }
 
   async function handleScan() {
     if (scanning) return;
@@ -126,6 +136,16 @@ export default function TopBar({ onAuthChange }: Props) {
                   ? <Loader2 className="w-3.5 h-3.5 text-ink-muted animate-spin" />
                   : <RefreshCw className="w-3.5 h-3.5 text-ink-muted" />}
                 Refresh library
+              </button>
+
+              <button
+                onClick={toggleTheme}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink hover:bg-surface-high transition-colors"
+              >
+                {lightMode
+                  ? <Moon className="w-3.5 h-3.5 text-ink-muted" />
+                  : <Sun className="w-3.5 h-3.5 text-ink-muted" />}
+                {lightMode ? 'Dark mode' : 'Light mode'}
               </button>
 
               <div className="border-t border-line mt-1 pt-1">

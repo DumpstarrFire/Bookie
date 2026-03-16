@@ -52,9 +52,9 @@ export default function FilterBar() {
   })
 
   const hasActiveFilters =
-    filters.format !== '' || filters.tag !== '' || filters.sort !== 'date_added' || filters.order !== 'desc'
+    filters.format !== '' || filters.tag !== '' || filters.sort !== 'author' || filters.order !== 'asc'
 
-  const clearFilters = () => setFilters({ format: '', tag: '', sort: 'date_added', order: 'desc' })
+  const clearFilters = () => setFilters({ format: '', tag: '', sort: 'author', order: 'asc' })
   const toggleOrder = () => setFilters({ order: filters.order === 'asc' ? 'desc' : 'asc' })
 
   const filterControls = (

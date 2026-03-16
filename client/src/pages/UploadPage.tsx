@@ -1,7 +1,9 @@
 import { useState, useRef, useCallback } from 'react'
-import { Upload, X, CheckCircle, AlertCircle, FileText, ArrowLeft } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Upload, X, CheckCircle, AlertCircle, FileText, ArrowLeft, Tag as TagIcon } from 'lucide-react'
 import { useStore } from '../store'
 import * as api from '../api/client'
+import type { Tag } from '../types'
 
 interface FileItem {
   id: string
@@ -9,6 +11,7 @@ interface FileItem {
   status: 'pending' | 'uploading' | 'done' | 'error'
   progress: number
   error?: string
+  bookId?: number
 }
 
 const ALLOWED = new Set(['epub', 'pdf', 'mobi', 'azw', 'azw3', 'fb2', 'djvu', 'cbz', 'cbr', 'txt'])
@@ -21,37 +24,42 @@ export default function UploadPage() {
   const { setView } = useStore()
   const [items, setItems] = useState<FileItem[]>([])
   const [dragging, setDragging] = useState(false)
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const { data: allTags = [] } = useQuery<Tag[]>({ queryKey: ['tags'], queryFn: api.getTags })
 
   function addFiles(files: File[]) {
     const valid = files.filter(f => ALLOWED.has(ext(f.name)))
     if (!valid.length) return
     setItems(prev => [
       ...prev,
-      ...valid.map(f => ({
-        id: Math.random().toString(36).slice(2),
-        file: f,
-        status: 'pending' as const,
-        progress: 0,
-      })),
+      ...valid.map(f => ({ id: Math.random().toString(36).slice(2), file: f, status: 'pending' as const, progress: 0 })),
     ])
   }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
+    e.preventDefault(); setDragging(false)
     addFiles(Array.from(e.dataTransfer.files))
   }, [])
+
+  function toggleTag(name: string) {
+    setSelectedTags(prev => prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name])
+  }
 
   async function uploadAll() {
     const pending = items.filter(i => i.status === 'pending' || i.status === 'error')
     for (const item of pending) {
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'uploading', progress: 0, error: undefined } : i))
       try {
-        await api.uploadFile(item.file, progress => {
+        const book = await api.uploadFile(item.file, progress => {
           setItems(prev => prev.map(i => i.id === item.id ? { ...i, progress } : i))
         })
-        setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', progress: 100 } : i))
+        // Apply selected tags after successful upload
+        if (selectedTags.length > 0 && book?.id) {
+          await Promise.all(selectedTags.map(tag => api.addBookTag(book.id, tag).catch(() => {})))
+        }
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', progress: 100, bookId: book?.id } : i))
       } catch (err) {
         setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: (err as Error).message } : i))
       }
@@ -65,11 +73,7 @@ export default function UploadPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => setView('library')}
-          className="btn-ghost p-2 -ml-2"
-          title="Back to library"
-        >
+        <button onClick={() => setView('library')} className="btn-ghost p-2 -ml-2" title="Back to library">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <h1 className="text-lg font-semibold text-ink">Upload Books</h1>
@@ -90,15 +94,45 @@ export default function UploadPage() {
           <p className="text-xs text-ink-muted mt-1">EPUB, PDF, MOBI, AZW3, FB2, DJVU, CBZ, CBR, TXT · max 35 MB</p>
         </div>
         <input
-          ref={inputRef}
-          type="file"
-          multiple
+          ref={inputRef} type="file" multiple
           accept={[...ALLOWED].map(e => `.${e}`).join(',')}
           className="hidden"
           onChange={e => addFiles(Array.from(e.target.files ?? []))}
           onClick={e => e.stopPropagation()}
         />
       </div>
+
+      {/* Tag selector */}
+      {allTags.length > 0 && (
+        <div className="mt-4 card p-4 space-y-2">
+          <p className="text-xs font-medium text-ink-muted flex items-center gap-1.5">
+            <TagIcon className="w-3.5 h-3.5" />
+            Apply tags at import
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {allTags.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => toggleTag(t.name)}
+                className={[
+                  'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                  selectedTags.includes(t.name)
+                    ? 'bg-accent text-white'
+                    : 'bg-surface-raised text-ink-muted hover:text-ink border border-line',
+                ].join(' ')}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+          {selectedTags.length > 0 && (
+            <button onClick={() => setSelectedTags([])} className="text-xs text-ink-faint hover:text-ink-muted transition-colors">
+              Clear selection
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Queue */}
       {items.length > 0 && (
@@ -111,23 +145,15 @@ export default function UploadPage() {
                 <p className="text-xs text-ink-muted">{(item.file.size / 1024 / 1024).toFixed(1)} MB</p>
                 {item.status === 'uploading' && (
                   <div className="mt-1.5 h-1 bg-surface-raised rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-accent rounded-full transition-all duration-200"
-                      style={{ width: `${item.progress}%` }}
-                    />
+                    <div className="h-full bg-accent rounded-full transition-all duration-200" style={{ width: `${item.progress}%` }} />
                   </div>
                 )}
-                {item.status === 'error' && (
-                  <p className="text-xs text-danger mt-0.5">{item.error}</p>
-                )}
+                {item.status === 'error' && <p className="text-xs text-danger mt-0.5">{item.error}</p>}
               </div>
               {item.status === 'done' && <CheckCircle className="w-4 h-4 text-success shrink-0" />}
               {item.status === 'error' && <AlertCircle className="w-4 h-4 text-danger shrink-0" />}
               {(item.status === 'pending' || item.status === 'error') && (
-                <button
-                  onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))}
-                  className="text-ink-muted hover:text-danger transition-colors shrink-0"
-                >
+                <button onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))} className="text-ink-muted hover:text-danger transition-colors shrink-0">
                   <X className="w-4 h-4" />
                 </button>
               )}
@@ -139,16 +165,9 @@ export default function UploadPage() {
       {/* Actions */}
       {items.length > 0 && (
         <div className="flex items-center justify-between mt-4">
-          <button
-            onClick={() => setItems([])}
-            className="btn-ghost text-sm"
-          >
-            Clear all
-          </button>
+          <button onClick={() => setItems([])} className="btn-ghost text-sm">Clear all</button>
           <div className="flex items-center gap-3">
-            {doneCount > 0 && (
-              <span className="text-sm text-success">{doneCount} uploaded</span>
-            )}
+            {doneCount > 0 && <span className="text-sm text-success">{doneCount} uploaded</span>}
             <button
               className="btn-primary"
               onClick={uploadAll}

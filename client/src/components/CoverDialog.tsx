@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { Search, Upload, Link, X, Check } from 'lucide-react'
 import * as api from '../api/client'
@@ -42,15 +42,18 @@ export default function CoverDialog({ bookId, bookTitle, bookAuthor, fileFormat,
   const [previewFile, setPreviewFile] = useState<File | null>(null)
   const [previewMode, setPreviewMode] = useState<'search' | 'url' | 'file' | null>(null)
 
+  // Auto-search on mount when there's a query
+  useEffect(() => {
+    if (searchQuery.trim()) searchCovers()
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
   const uploadMutation = useMutation({
     mutationFn: async () => {
       if (previewFile) {
         const formData = new FormData()
         formData.append('cover', previewFile)
         const res = await fetch(`/api/books/${bookId}/cover`, {
-          method: 'POST',
-          credentials: 'include',
-          body: formData,
+          method: 'POST', credentials: 'include', body: formData,
         })
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))
@@ -64,14 +67,9 @@ export default function CoverDialog({ bookId, bookTitle, bookAuthor, fileFormat,
       }
     },
     onSuccess: async (book) => {
-      // Try to embed into EPUB
       if (fileFormat?.toLowerCase() === 'epub') {
-        try {
-          await api.embedCover(bookId)
-          addToast('success', 'Cover saved and embedded in EPUB')
-        } catch {
-          addToast('success', 'Cover saved (embed failed)')
-        }
+        try { await api.embedCover(bookId); addToast('success', 'Cover saved and embedded in EPUB') }
+        catch { addToast('success', 'Cover saved (embed failed)') }
       } else {
         addToast('success', 'Cover saved')
       }
@@ -99,42 +97,31 @@ export default function CoverDialog({ bookId, bookTitle, bookAuthor, fileFormat,
   }
 
   function selectSearchResult(url: string) {
-    setSelectedUrl(url)
-    setPreviewUrl(url)
-    setPreviewFile(null)
-    setManualUrl('')
-    setPreviewMode('search')
+    setSelectedUrl(url); setPreviewUrl(url); setPreviewFile(null); setManualUrl(''); setPreviewMode('search')
   }
 
   function applyManualUrl() {
     const url = manualUrl.trim()
     if (!url) return
-    setSelectedUrl(url)
-    setPreviewUrl(url)
-    setPreviewFile(null)
-    setPreviewMode('url')
+    setSelectedUrl(url); setPreviewUrl(url); setPreviewFile(null); setPreviewMode('url')
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setPreviewFile(file)
-    setPreviewUrl(URL.createObjectURL(file))
-    setSelectedUrl(null)
-    setManualUrl('')
-    setPreviewMode('file')
+    setPreviewFile(file); setPreviewUrl(URL.createObjectURL(file)); setSelectedUrl(null); setManualUrl(''); setPreviewMode('file')
     e.target.value = ''
+  }
+
+  function clearPreview() {
+    setPreviewUrl(null); setPreviewFile(null); setSelectedUrl(null); setPreviewMode(null)
   }
 
   const canSave = previewMode !== null && (previewFile || selectedUrl || manualUrl.trim())
 
   const footer = (
     <div className="flex items-center justify-between gap-3">
-      <button
-        type="button"
-        onClick={onClose}
-        className="px-3 py-2 rounded text-sm font-medium text-ink border border-line hover:bg-surface-raised transition-colors"
-      >
+      <button type="button" onClick={onClose} className="px-3 py-2 rounded text-sm font-medium text-ink border border-line hover:bg-surface-raised transition-colors">
         Cancel
       </button>
       <button
@@ -151,126 +138,109 @@ export default function CoverDialog({ bookId, bookTitle, bookAuthor, fileFormat,
 
   return (
     <Dialog open onClose={onClose} title="Change Cover" footer={footer} wide>
-      <div className="p-5 space-y-5">
-        {/* Preview */}
-        {previewUrl && (
-          <div className="flex flex-col items-center gap-2">
-            <div className="relative">
-              <img
-                src={previewUrl}
-                alt="Cover preview"
-                className="max-h-48 max-w-[120px] rounded-lg object-contain border border-line shadow-sm"
-              />
+      <div className="p-4 space-y-3">
+        {/* Search bar */}
+        <div className="flex gap-2">
+          <input
+            className="field flex-1"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && searchCovers()}
+            placeholder="Search for covers…"
+          />
+          <button
+            type="button"
+            onClick={searchCovers}
+            disabled={searching || !searchQuery.trim()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded text-sm font-medium border border-line hover:bg-surface-raised transition-colors disabled:opacity-50 shrink-0"
+          >
+            {searching ? <Spinner size={14} /> : <Search size={14} />}
+            Search
+          </button>
+        </div>
+
+        {/* Results grid */}
+        {searching && (
+          <div className="flex justify-center py-8"><Spinner size={24} /></div>
+        )}
+        {!searching && coverResults.length > 0 && (
+          <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 max-h-72 overflow-y-auto pr-1">
+            {coverResults.map((r, i) => (
               <button
+                key={i}
                 type="button"
-                onClick={() => { setPreviewUrl(null); setPreviewFile(null); setSelectedUrl(null); setPreviewMode(null) }}
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-surface-raised border border-line flex items-center justify-center text-ink-muted hover:text-ink"
+                onClick={() => selectSearchResult(r.cover_url)}
+                className={[
+                  'relative rounded-lg overflow-hidden border-2 transition-all',
+                  selectedUrl === r.cover_url ? 'border-accent' : 'border-transparent hover:border-line',
+                ].join(' ')}
+                title={`${r.title} (${SOURCE_LABELS[r.source] ?? r.source})`}
               >
-                <X size={10} />
+                <img
+                  src={r.cover_url}
+                  alt={r.title}
+                  loading="lazy"
+                  className="w-full aspect-[2/3] object-cover bg-surface-raised"
+                  onError={e => (e.currentTarget.closest('button')!.style.display = 'none')}
+                />
+                <span className="absolute bottom-0 left-0 right-0 text-[8px] bg-black/60 text-white px-0.5 py-0.5 truncate text-center leading-tight">
+                  {SOURCE_LABELS[r.source] ?? r.source}
+                </span>
+                {selectedUrl === r.cover_url && (
+                  <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-accent flex items-center justify-center">
+                    <Check size={10} className="text-white" />
+                  </span>
+                )}
               </button>
-            </div>
-            <p className="text-xs text-ink-muted">
-              {previewMode === 'file' ? previewFile?.name : 'Selected cover'}
+            ))}
+          </div>
+        )}
+        {!searching && coverResults.length === 0 && searchQuery && (
+          <p className="text-xs text-ink-muted text-center py-2">No covers found — try a different search</p>
+        )}
+
+        {/* Selected preview strip */}
+        {previewUrl && (
+          <div className="flex items-center gap-3 px-3 py-2 bg-surface-raised rounded-lg">
+            <img src={previewUrl} alt="Selected" className="h-12 w-8 object-cover rounded shrink-0" />
+            <p className="text-xs text-ink-muted flex-1 truncate">
+              {previewMode === 'file' ? previewFile?.name : 'Cover selected'}
             </p>
+            <button type="button" onClick={clearPreview} className="text-ink-muted hover:text-ink shrink-0">
+              <X size={14} />
+            </button>
           </div>
         )}
 
-        {/* Search */}
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-ink-muted uppercase tracking-wide">Search Online</p>
-          <div className="flex gap-2">
-            <input
-              className="field flex-1"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && searchCovers()}
-              placeholder="Title and/or author…"
-            />
-            <button
-              type="button"
-              onClick={searchCovers}
-              disabled={searching || !searchQuery.trim()}
-              className="flex items-center gap-1.5 px-3 py-2 rounded text-sm font-medium border border-line hover:bg-surface-raised transition-colors disabled:opacity-50"
-            >
-              {searching ? <Spinner size={14} /> : <Search size={14} />}
-              Search
-            </button>
-          </div>
-          {coverResults.length > 0 && (
-            <div className="grid grid-cols-4 gap-2 max-h-52 overflow-y-auto mt-2 pr-1">
-              {coverResults.map((r, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => selectSearchResult(r.cover_url)}
-                  className={[
-                    'relative rounded-lg overflow-hidden border-2 transition-all',
-                    selectedUrl === r.cover_url ? 'border-accent' : 'border-transparent hover:border-line',
-                  ].join(' ')}
-                  title={`${r.title} (${SOURCE_LABELS[r.source] ?? r.source})`}
-                >
-                  <img
-                    src={r.cover_url}
-                    alt={r.title}
-                    loading="lazy"
-                    className="w-full aspect-[2/3] object-cover bg-surface-raised"
-                    onError={e => (e.currentTarget.closest('button')!.style.display = 'none')}
-                  />
-                  <span className="absolute bottom-0 left-0 right-0 text-[9px] bg-black/60 text-white px-1 py-0.5 truncate">
-                    {SOURCE_LABELS[r.source] ?? r.source}
-                  </span>
-                  {selectedUrl === r.cover_url && (
-                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-accent flex items-center justify-center">
-                      <Check size={10} className="text-white" />
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-          {coverResults.length === 0 && !searching && searchQuery && (
-            <p className="text-xs text-ink-muted">No results yet — click Search</p>
-          )}
-        </div>
-
-        <div className="border-t border-line" />
-
-        {/* Upload from file */}
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-ink-muted uppercase tracking-wide">Upload from File</p>
+        {/* Compact bottom row: upload file + paste URL */}
+        <div className="flex flex-wrap gap-2 pt-1 border-t border-line">
           <input ref={fileInputRef} type="file" accept="image/*" className="sr-only" onChange={handleFileSelect} />
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-3 py-2 rounded text-sm text-ink border border-line hover:bg-surface-raised transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs text-ink border border-line hover:bg-surface-raised transition-colors"
           >
-            <Upload size={14} />
-            Choose image file…
+            <Upload size={12} />
+            Upload file
           </button>
-        </div>
 
-        <div className="border-t border-line" />
-
-        {/* Paste URL */}
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-ink-muted uppercase tracking-wide">Paste Image URL</p>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 flex-1 min-w-0">
             <input
-              className="field flex-1"
+              className="field flex-1 min-w-0 text-xs py-1.5"
               value={manualUrl}
               onChange={e => setManualUrl(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && applyManualUrl()}
-              placeholder="https://…"
+              placeholder="Paste image URL…"
               type="url"
             />
             <button
               type="button"
               onClick={applyManualUrl}
               disabled={!manualUrl.trim()}
-              className="flex items-center gap-1.5 px-3 py-2 rounded text-sm font-medium border border-line hover:bg-surface-raised transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium border border-line hover:bg-surface-raised transition-colors disabled:opacity-50 shrink-0"
             >
-              <Link size={14} />
-              Preview
+              <Link size={12} />
+              Use
             </button>
           </div>
         </div>

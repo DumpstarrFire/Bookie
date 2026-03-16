@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Trash2, Save, Image, ChevronDown, Check, AlertCircle, Download, Star, Send } from 'lucide-react'
+import { BookOpen, Trash2, Save, Image, ChevronDown, Check, AlertCircle, Download, Send } from 'lucide-react'
 import * as api from '../api/client'
 import { Book, Tag, EmailAddress } from '../types'
 import Dialog from './Dialog'
@@ -140,8 +140,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
   const [publishedDate, setPublishedDate] = useState('')
   const [series, setSeries] = useState('')
   const [seriesOrder, setSeriesOrder] = useState('')
-  const [rating, setRating] = useState<number | null>(null)
-  const [hoverRating, setHoverRating] = useState<number | null>(null)
   const [imgError, setImgError] = useState(false)
   const [showMetaDialog, setShowMetaDialog] = useState(false)
   const [showCoverDialog, setShowCoverDialog] = useState(false)
@@ -170,7 +168,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
       setPublishedDate(book.published_date ?? '')
       setSeries(book.series ?? '')
       setSeriesOrder(book.series_order != null ? String(book.series_order) : '')
-      setRating(book.rating ?? null)
       setImgError(false)
     }
   }, [book])
@@ -182,7 +179,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
       published_date: publishedDate || null,
       series: series || null,
       series_order: seriesOrder !== '' ? Number(seriesOrder) : null,
-      rating: rating,
     }),
     onSuccess: (updated) => {
       qc.setQueryData(['book', bookId], updated)
@@ -456,42 +452,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
                 )}
               </div>
 
-              {/* Rating */}
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-ink-muted uppercase tracking-wide">Rating</label>
-                <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4, 5].map(star => (
-                    <button
-                      key={star}
-                      type="button"
-                      onMouseEnter={() => setHoverRating(star)}
-                      onMouseLeave={() => setHoverRating(null)}
-                      onClick={() => setRating(rating === star ? null : star)}
-                      className="text-xl leading-none transition-colors focus-visible:outline-none"
-                      aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
-                    >
-                      <Star
-                        size={18}
-                        className={
-                          (hoverRating ?? rating ?? 0) >= star
-                            ? 'text-yellow-400 fill-yellow-400'
-                            : 'text-ink-faint'
-                        }
-                      />
-                    </button>
-                  ))}
-                  {rating !== null && (
-                    <button
-                      type="button"
-                      onClick={() => setRating(null)}
-                      className="ml-1 text-xs text-ink-faint hover:text-ink-muted transition-colors"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-
               {/* Save error */}
               {saveMutation.isError && (
                 <div className="flex items-center gap-2 text-xs text-danger">
@@ -549,7 +509,6 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
             setPublishedDate(updated.published_date ?? '')
             setSeries(updated.series ?? '')
             setSeriesOrder(updated.series_order != null ? String(updated.series_order) : '')
-            setRating(updated.rating ?? null)
             setImgError(false)
             setShowMetaDialog(false)
           }}

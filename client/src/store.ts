@@ -47,8 +47,8 @@ const defaultFilters: Filters = {
   q: '',
   format: '',
   tag: '',
-  sort: 'date_added',
-  order: 'desc',
+  sort: 'author',
+  order: 'asc',
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────

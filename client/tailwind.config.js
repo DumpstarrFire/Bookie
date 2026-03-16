@@ -5,10 +5,10 @@ export default {
     extend: {
       colors: {
         surface: {
-          DEFAULT: '#0e0e12',
-          card: '#16161d',
-          raised: '#1c1c26',
-          high: '#22222e',
+          DEFAULT: 'var(--surface)',
+          card: 'var(--surface-card)',
+          raised: 'var(--surface-raised)',
+          high: 'var(--surface-high)',
         },
         accent: {
           DEFAULT: '#7c6af8',
@@ -16,13 +16,13 @@ export default {
           muted: 'rgba(124,106,248,0.15)',
         },
         ink: {
-          DEFAULT: '#e2e2ee',
-          muted: '#8080a0',
-          faint: '#404055',
+          DEFAULT: 'var(--ink)',
+          muted: 'var(--ink-muted)',
+          faint: 'var(--ink-faint)',
         },
         line: {
-          DEFAULT: 'rgba(255,255,255,0.07)',
-          strong: 'rgba(255,255,255,0.12)',
+          DEFAULT: 'var(--line)',
+          strong: 'var(--line-strong)',
         },
         danger: '#e05252',
         success: '#4ade80',
