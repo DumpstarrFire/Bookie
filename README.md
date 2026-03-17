@@ -17,7 +17,7 @@ Bookie is a stupidly simple eBook management, designed for those who only need t
 - Configurable file rename schemes and folder organization
 - PWA support
 - Dark & Light mode for the UI
-- Tagging (acts like shelves, but like complicated)
+- Tagging (acts like shelves, but less complicated)
 - Series support
 
 ## Metadata Basics
