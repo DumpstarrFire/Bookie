@@ -410,7 +410,7 @@ export default function FilterBar() {
       </div>
 
       {/* Desktop + mobile selection toolbar row */}
-      <div className="flex items-center justify-between gap-3">
+      <div className={`flex items-center justify-between gap-3${selectionMode ? '' : ' hidden lg:flex'}`}>
         {selectionMode ? (
           <div className="flex-1 min-w-0">
             {selectionToolbar}
