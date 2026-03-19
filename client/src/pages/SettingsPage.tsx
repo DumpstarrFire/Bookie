@@ -456,7 +456,7 @@ function MetadataTab() {
     setDisabled(prev => { const n = new Set(prev); n.has(source) ? n.delete(source) : n.add(source); return n })
   }
 
-  const sourceLabels = srcData?.labels ?? { google_books: 'Google Books', open_library: 'Open Library', goodreads: 'Goodreads' }
+  const sourceLabels = srcData?.labels ?? { open_library: 'Open Library', itunes: 'Apple Books', goodreads: 'Goodreads' }
 
   return (
     <div className="space-y-4">

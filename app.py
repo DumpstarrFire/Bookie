@@ -772,7 +772,7 @@ def create_app():
     def fetch_metadata(book_id):
         book = Book.query.get_or_404(book_id)
         data = request.get_json(force=True) or {}
-        source = data.get("source", "google_books")
+        source = data.get("source", "open_library")
         query = data.get("query") or book.isbn or book.isbn13 or book.title or ""
         apply_to_book = data.get("apply", False)
 

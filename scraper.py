@@ -1,4 +1,4 @@
-"""Metadata scraping from Google Books, Open Library, iTunes, and GoodReads."""
+"""Metadata scraping from Open Library, Apple Books, and GoodReads."""
 import re
 import time
 import logging
@@ -16,71 +16,6 @@ HEADERS = {
         "Chrome/120.0.0.0 Safari/537.36"
     )
 }
-
-
-# ---------------------------------------------------------------------------
-# Google Books
-# ---------------------------------------------------------------------------
-
-def search_google_books(query: str, max_results: int = 10) -> list[dict]:
-    """Search Google Books API with rate-limit retry."""
-    url = "https://www.googleapis.com/books/v1/volumes"
-    params = {"q": query, "maxResults": max_results, "printType": "books"}
-    for attempt in range(3):
-        try:
-            r = requests.get(url, params=params, timeout=10)
-            if r.status_code == 429:
-                wait = 2 ** attempt
-                logger.warning("Google Books rate limited, retrying in %ds", wait)
-                time.sleep(wait)
-                continue
-            r.raise_for_status()
-            data = r.json()
-            return [_parse_google_volume(item) for item in data.get("items", [])]
-        except Exception as exc:
-            logger.warning("Google Books search failed: %s", exc)
-            return []
-    return []
-
-
-def fetch_google_books_by_isbn(isbn: str) -> dict | None:
-    results = search_google_books(f"isbn:{isbn}", max_results=1)
-    return results[0] if results else None
-
-
-def _parse_google_volume(item: dict) -> dict:
-    info = item.get("volumeInfo", {})
-    isbns = {i["type"]: i["identifier"] for i in info.get("industryIdentifiers", [])}
-    image = info.get("imageLinks", {})
-    # Get best available cover; replace zoom param for higher quality
-    cover_url = (
-        image.get("extraLarge") or image.get("large")
-        or image.get("medium") or image.get("thumbnail")
-    )
-    if cover_url:
-        cover_url = cover_url.replace("http://", "https://")
-        # Request highest-res image (zoom=0 = full-size, fife override for width)
-        cover_url = re.sub(r"zoom=\d+", "zoom=0", cover_url)
-        cover_url = cover_url.replace("&edge=curl", "")
-        # Add fife param for up to 1600px wide if not already present
-        if "fife=" not in cover_url:
-            cover_url += "&fife=w1600"
-    return {
-        "source": "google_books",
-        "google_books_id": item.get("id"),
-        "title": info.get("title"),
-        "author": ", ".join(info.get("authors", [])),
-        "publisher": info.get("publisher"),
-        "published_date": info.get("publishedDate"),
-        "description": info.get("description"),
-        "page_count": info.get("pageCount"),
-        "categories": ", ".join(info.get("categories", [])),
-        "language": info.get("language"),
-        "isbn": isbns.get("ISBN_10"),
-        "isbn13": isbns.get("ISBN_13"),
-        "rating": info.get("averageRating"),
-        "cover_url": cover_url,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -134,11 +69,11 @@ def _parse_ol_doc(doc: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# iTunes / Apple Books  (great high-res covers, no auth required)
+# Apple Books  (great high-res covers, no auth required)
 # ---------------------------------------------------------------------------
 
 def search_itunes(query: str, max_results: int = 10) -> list[dict]:
-    """Search Apple Books (iTunes) — reliable source of high-res covers."""
+    """Search Apple Books — reliable source of high-res covers."""
     url = "https://itunes.apple.com/search"
     params = {"term": query, "media": "ebook", "limit": max_results}
     try:
@@ -167,7 +102,7 @@ def search_itunes(query: str, max_results: int = 10) -> list[dict]:
             })
         return results
     except Exception as exc:
-        logger.warning("iTunes search failed: %s", exc)
+        logger.warning("Apple Books search failed: %s", exc)
         return []
 
 
@@ -288,20 +223,10 @@ def _parse_gr_book_page(html: str, book_id: str) -> dict:
 
 def fetch_cover_urls_for_isbn(isbn: str) -> list[str]:
     """Return a prioritized list of cover image URLs for a given ISBN."""
-    urls = []
     clean = re.sub(r"[^0-9X]", "", isbn.upper())
-    if len(clean) == 13:
-        urls.append(f"https://covers.openlibrary.org/b/isbn/{clean}-L.jpg")
-        # Google Books by ISBN
-        gb = fetch_google_books_by_isbn(clean)
-        if gb and gb.get("cover_url"):
-            urls.append(gb["cover_url"])
-    elif len(clean) == 10:
-        urls.append(f"https://covers.openlibrary.org/b/isbn/{clean}-L.jpg")
-        gb = fetch_google_books_by_isbn(clean)
-        if gb and gb.get("cover_url"):
-            urls.append(gb["cover_url"])
-    return urls
+    if len(clean) in (10, 13):
+        return [f"https://covers.openlibrary.org/b/isbn/{clean}-L.jpg"]
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -309,16 +234,14 @@ def fetch_cover_urls_for_isbn(isbn: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 SOURCE_FNS = {
-    "google_books":  search_google_books,
     "open_library":  search_open_library,
     "itunes":        search_itunes,
     "goodreads":     search_goodreads,
 }
 
-DEFAULT_SOURCE_ORDER = ["google_books", "open_library", "itunes", "goodreads"]
+DEFAULT_SOURCE_ORDER = ["open_library", "itunes", "goodreads"]
 
 SOURCE_LABELS = {
-    "google_books":  "Google Books",
     "open_library":  "Open Library",
     "itunes":        "Apple Books",
     "goodreads":     "GoodReads",
