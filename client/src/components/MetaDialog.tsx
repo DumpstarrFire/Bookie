@@ -148,8 +148,8 @@ export default function MetaDialog({ bookTitle, bookAuthor, onClose, onApplied }
             </button>
           </div>
 
-          <div className="p-4 flex gap-4">
-            <div className="shrink-0 w-20 h-[120px] rounded-lg overflow-hidden border border-line bg-surface-raised flex items-center justify-center">
+          <div className="p-4 flex gap-4 items-stretch">
+            <div className="flex-1 aspect-[2/3] rounded-lg overflow-hidden border border-line bg-surface-raised flex items-center justify-center">
               {previewResult.cover_url ? (
                 <img
                   src={previewResult.cover_url}
