@@ -420,6 +420,7 @@ export default function BookDialog({ bookId, onClose, onDelete }: BookDialogProp
       {showMetaDialog && book && (
         <MetaDialog
           bookTitle={book.title ?? book.filename}
+          bookAuthor={book.author ?? undefined}
           onClose={() => setShowMetaDialog(false)}
           onApplied={(result: MetaResult) => {
             if (result.title) setTitle(result.title)

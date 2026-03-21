@@ -8,12 +8,13 @@ import Spinner from './Spinner'
 
 interface MetaDialogProps {
   bookTitle: string
+  bookAuthor?: string
   onClose: () => void
   onApplied: (result: MetaResult) => void
 }
 
-export default function MetaDialog({ bookTitle, onClose, onApplied }: MetaDialogProps) {
-  const [query, setQuery] = useState(bookTitle)
+export default function MetaDialog({ bookTitle, bookAuthor, onClose, onApplied }: MetaDialogProps) {
+  const [query, setQuery] = useState([bookTitle, bookAuthor].filter(Boolean).join(' '))
   const [results, setResults] = useState<MetaResult[] | null>(null)
   const [previewResult, setPreviewResult] = useState<MetaResult | null>(null)
 
@@ -55,7 +56,6 @@ export default function MetaDialog({ bookTitle, onClose, onApplied }: MetaDialog
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Search by title, author, ISBN…"
-              autoFocus
               className="field pl-9"
             />
           </div>
@@ -144,28 +144,27 @@ export default function MetaDialog({ bookTitle, onClose, onApplied }: MetaDialog
               onClick={() => { onApplied(previewResult); onClose() }}
               className="btn-primary py-1.5 text-sm"
             >
-              Use this
+              Use
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-            {previewResult.cover_url ? (
-              <img
-                src={previewResult.cover_url}
-                alt={previewResult.title ?? ''}
-                className="w-32 h-48 object-cover rounded-lg border border-line mx-auto shadow-lg"
-                draggable={false}
-              />
-            ) : (
-              <div className="w-32 h-48 rounded-lg border border-line bg-surface-raised flex items-center justify-center mx-auto">
-                <BookOpen size={32} className="text-ink-faint" />
-              </div>
-            )}
-
-            <div className="flex flex-col gap-2">
-              <h3 className="text-ink font-semibold text-base leading-snug">{previewResult.title ?? 'Unknown Title'}</h3>
-              {previewResult.author && <p className="text-ink-muted text-sm">{previewResult.author}</p>}
-              <div className="flex items-center gap-3 flex-wrap text-xs text-ink-faint">
+          <div className="p-4 flex gap-4">
+            <div className="shrink-0 w-20 h-[120px] rounded-lg overflow-hidden border border-line bg-surface-raised flex items-center justify-center">
+              {previewResult.cover_url ? (
+                <img
+                  src={previewResult.cover_url}
+                  alt={previewResult.title ?? ''}
+                  className="w-full h-full object-cover"
+                  draggable={false}
+                />
+              ) : (
+                <BookOpen size={24} className="text-ink-faint" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col gap-1 pt-0.5">
+              <p className="text-ink font-semibold text-sm leading-snug">{previewResult.title ?? 'Unknown Title'}</p>
+              {previewResult.author && <p className="text-ink-muted text-xs">{previewResult.author}</p>}
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-faint mt-1">
                 {previewResult.published_date && <span>{previewResult.published_date.slice(0, 4)}</span>}
                 {previewResult.publisher && <span>{previewResult.publisher}</span>}
                 {previewResult.isbn13 && <span className="font-mono">{previewResult.isbn13}</span>}
