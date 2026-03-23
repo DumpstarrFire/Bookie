@@ -136,7 +136,9 @@ export default function BookCard({ book, onClick }: BookCardProps) {
             </button>
 
             {menuOpen && (
-              <div className="absolute left-0 top-full mt-0.5 w-44 bg-surface-raised border border-line rounded-lg shadow-xl py-1 z-50">
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} aria-hidden />
+                <div className="absolute left-0 top-full mt-0.5 w-36 bg-surface-raised border border-line rounded-lg shadow-xl py-1 z-50">
                 <button type="button" onClick={() => { setMenuOpen(false); setSelectionMode(true); toggleBookSelection(book.id) }}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-ink hover:bg-surface-high transition-colors">
                   <CheckSquare size={14} className="text-ink-muted" /> Select
@@ -159,6 +161,7 @@ export default function BookCard({ book, onClick }: BookCardProps) {
                   </div>
                 )}
               </div>
+              </>
             )}
           </div>
         )}
