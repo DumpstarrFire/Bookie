@@ -38,7 +38,7 @@ function applyTheme(mode: ThemeMode) {
 }
 
 export default function TopBar({ onAuthChange }: Props) {
-  const { user, view, setView } = useStore();
+  const { user, view, setView, setPage, setFilters, setSearchQuery } = useStore();
   const { addToast } = useToast();
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.getSettings, staleTime: 60_000 });
   const displayName = (typeof settings?.display_name === 'string' && settings.display_name ? settings.display_name : null) || user?.username;
@@ -97,7 +97,7 @@ export default function TopBar({ onAuthChange }: Props) {
     <header className="sticky top-0 z-40 h-14 bg-surface-card border-b border-line flex items-center gap-3 px-4">
       {/* Brand — always visible */}
       <button
-        onClick={() => setView('library')}
+        onClick={() => { setView('library'); setPage(1); setFilters({ q: '', format: '', tag: '', series: '', sort: 'author', order: 'asc' }); setSearchQuery('') }}
         className="flex items-center gap-2 shrink-0 text-ink hover:text-accent transition-colors"
       >
         <BookOpen className="w-5 h-5 text-accent" />
