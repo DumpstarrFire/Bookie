@@ -20,18 +20,9 @@ A self-hosted ebook manager built for simplicity. Organize your library, fetch m
 - Configurable file rename schemes and folder structures
 - Bulk selection and batch operations
 
-**Delivery**
-- Send to any eReader via SMTP — Kindle, Kobo, or otherwise
-- Configurable sender address and recipient management
+<img width="820" height="597" alt="image" src="https://github.com/user-attachments/assets/f6cbe98d-319f-4b6e-92fb-785a3f90ccba" />
 
-**Experience**
-- Progressive Web App (PWA) — installable on mobile
-- Light and dark mode
-- Fully responsive layout
-
----
-
-## Quick Start
+## Docker Compose
 
 ```yaml
 services:
@@ -47,19 +38,7 @@ services:
     restart: unless-stopped
 ```
 
-On first run, navigate to the UI and complete the one-time account setup.
-
----
-
-## Volumes
-
-| Path | Purpose |
-|---|---|
-| `/app/data` | Database, credentials, and app configuration |
-
-Books are served from the path configured inside the app after setup.
-
----
+Access the UI at http://localhost:5000
 
 ## License
 
