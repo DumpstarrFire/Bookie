@@ -1,8 +1,10 @@
+<img width="98" alt="bookie-icon" src="https://github.com/user-attachments/assets/46af76cc-8014-45b0-a664-97f09afd224a" />
+
 # Bookie
 
 A self-hosted ebook manager built for simplicity. Organize your library, fetch metadata, and send books directly to your eReader — all from a clean, fast web UI.
 
-> Built with Claude. Yes, really.
+> This project was built with Claude.
 
 <img width="100%" alt="Bookie UI" src="https://github.com/user-attachments/assets/e0755ecb-c6f7-4ed3-b57e-337dd64876e7" />
 
