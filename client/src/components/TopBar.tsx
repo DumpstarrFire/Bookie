@@ -97,7 +97,7 @@ export default function TopBar({ onAuthChange }: Props) {
     <header className="sticky top-0 z-40 h-14 bg-surface-card border-b border-line flex items-center gap-3 px-4">
       {/* Brand — always visible */}
       <button
-        onClick={() => { setView('library'); setPage(1) }}
+        onClick={() => { setView('library'); setPage(1); history.replaceState(null, '', window.location.pathname + window.location.search) }}
         className="flex items-center gap-2 shrink-0 text-ink hover:text-accent transition-colors"
       >
         <BookOpen className="w-5 h-5 text-accent" />
