@@ -241,20 +241,48 @@ def _cleanup_empty_dirs(directory: Path) -> None:
 
 
 def _clean_epub_font_sizes(epub_path: Path) -> None:
-    """Strip font-size declarations from CSS and inline styles in an EPUB.
+    """Strip font-size from body-text elements in an EPUB's CSS and inline styles.
 
-    Preserves all other formatting (bold, italic, color, images, layout).
+    Targets only primary body text (p, div, span, li, td, blockquote, body).
+    Preserves font-size on headings (h1-h6), drop caps (:first-letter),
+    captions, and other decorative/structural elements, as well as all other
+    formatting (bold, italic, color, images, layout).
     Modifies the file in-place; silently skips on any error.
     """
-    _FONT_SIZE_RE = re.compile(r'\bfont-size\s*:[^;}{]+;?', re.IGNORECASE)
-    _STYLE_ATTR_RE = re.compile(r'(<[^>]+\bstyle\s*=\s*["\'])([^"\']*?)(["\'])', re.IGNORECASE)
+    # Selectors that carry intentional font sizing — skip these CSS rules entirely
+    _PRESERVE_SELECTOR_RE = re.compile(
+        r'\b(h[1-6]|:first-letter|:first-line|figcaption|caption|aside|header|footer|nav|sup|sub)\b',
+        re.IGNORECASE,
+    )
+    # CSS rule blocks: captures "selector { declarations }"
+    _CSS_RULE_RE = re.compile(r'([^{}@][^{}]*?)\{([^{}]*?)\}', re.DOTALL)
+    _FONT_SIZE_DECL_RE = re.compile(r'\bfont-size\s*:[^;}{]+;?', re.IGNORECASE)
+    # Tags whose inline font-size overrides we want to remove
+    _BODY_TEXT_TAGS_RE = re.compile(
+        r'^(p|div|span|li|dd|dt|td|th|blockquote|article|section|main|body)$',
+        re.IGNORECASE,
+    )
+    # Matches an opening tag + its style="..." attribute
+    _INLINE_STYLE_RE = re.compile(
+        r'(<(\w+)(\s[^>]*?)?\bstyle\s*=\s*)(["\'])([^"\']*?)\4',
+        re.IGNORECASE,
+    )
 
-    def _strip_font_size(text: str) -> str:
-        return _FONT_SIZE_RE.sub('', text)
+    def _process_css(text: str) -> str:
+        def _replace_rule(m: re.Match) -> str:
+            selector, block = m.group(1), m.group(2)
+            if _PRESERVE_SELECTOR_RE.search(selector):
+                return m.group(0)
+            return selector + '{' + _FONT_SIZE_DECL_RE.sub('', block) + '}'
+        return _CSS_RULE_RE.sub(_replace_rule, text)
 
-    def _strip_inline(match: re.Match) -> str:
-        before, style, after = match.group(1), match.group(2), match.group(3)
-        return before + _FONT_SIZE_RE.sub('', style) + after
+    def _process_html(text: str) -> str:
+        def _replace_inline(m: re.Match) -> str:
+            prefix, tag, quote, style = m.group(1), m.group(2), m.group(4), m.group(5)
+            if not _BODY_TEXT_TAGS_RE.match(tag):
+                return m.group(0)
+            return prefix + quote + _FONT_SIZE_DECL_RE.sub('', style) + quote
+        return _INLINE_STYLE_RE.sub(_replace_inline, text)
 
     try:
         buf = io.BytesIO(epub_path.read_bytes())
@@ -266,11 +294,10 @@ def _clean_epub_font_sizes(epub_path: Path) -> None:
                 data = zin.read(name)
                 lower = name.lower()
                 if lower.endswith('.css'):
-                    cleaned = _strip_font_size(data.decode('utf-8', errors='replace'))
+                    cleaned = _process_css(data.decode('utf-8', errors='replace'))
                     new_data = cleaned.encode('utf-8')
-                elif lower.endswith(('.html', '.xhtml', '.htm', '.xml')):
-                    text = data.decode('utf-8', errors='replace')
-                    cleaned = _STYLE_ATTR_RE.sub(_strip_inline, text)
+                elif lower.endswith(('.html', '.xhtml', '.htm')):
+                    cleaned = _process_html(data.decode('utf-8', errors='replace'))
                     new_data = cleaned.encode('utf-8')
                 else:
                     new_data = data
