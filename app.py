@@ -295,6 +295,13 @@ def create_app():
 
     _REACT_DIST = Path(__file__).parent / "static" / "dist"
 
+    @app.route("/static/site.webmanifest")
+    def web_manifest():
+        resp = send_from_directory("static", "site.webmanifest")
+        resp.headers["Content-Type"] = "application/manifest+json"
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     @app.route("/sw.js")
     def service_worker():
         """Serve SW from root scope so it can control all pages."""
