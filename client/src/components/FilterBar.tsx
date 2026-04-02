@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Grid2x2, List, SlidersHorizontal, ChevronDown, X, Trash2 } from 'lucide-react'
 import { useStore } from '../store'
@@ -54,6 +54,8 @@ export default function FilterBar() {
   const [mobilePanel, setMobilePanel] = useState<'filters' | 'views' | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [tagging, setTagging] = useState(false)
+  const [clearingTags, setClearingTags] = useState(false)
+  const [selectionHasTaggedBooks, setSelectionHasTaggedBooks] = useState(false)
   const [fetchingMeta, setFetchingMeta] = useState(false)
   const [fetchMetaProgress, setFetchMetaProgress] = useState<{ done: number; total: number } | null>(null)
   const qc = useQueryClient()
@@ -91,6 +93,35 @@ export default function FilterBar() {
     queryFn: () => api.getSeries(),
   })
 
+  const refreshSelectionHasTaggedBooks = useCallback(async () => {
+    if (!selectionMode || selectedBookIds.length === 0) {
+      setSelectionHasTaggedBooks(false)
+      return
+    }
+    try {
+      for (const bookId of selectedBookIds) {
+        const tagsForBook = await api.getBookTags(bookId)
+        if (tagsForBook.length > 0) {
+          setSelectionHasTaggedBooks(true)
+          return
+        }
+      }
+      setSelectionHasTaggedBooks(false)
+    } catch {
+      setSelectionHasTaggedBooks(false)
+    }
+  }, [selectionMode, selectedBookIds])
+
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      await refreshSelectionHasTaggedBooks()
+      if (cancelled) return
+    }
+    run()
+    return () => { cancelled = true }
+  }, [refreshSelectionHasTaggedBooks])
+
   const hasActiveFilters =
     filters.format !== '' || filters.tag !== '' || filters.series !== '' ||
     filters.sort !== 'author' || filters.order !== 'asc'
@@ -126,10 +157,37 @@ export default function FilterBar() {
     setTagging(true)
     try {
       await api.bulkAddTag(selectedBookIds, tagName)
+      setSelectionHasTaggedBooks(true)
       qc.invalidateQueries({ queryKey: ['books'] })
       qc.invalidateQueries({ queryKey: ['tags'] })
     } finally {
       setTagging(false)
+    }
+  }
+
+  const handleBulkClearTags = async () => {
+    if (selectedBookIds.length === 0) return
+    setClearingTags(true)
+    let failedBooks = 0
+    try {
+      for (const bookId of selectedBookIds) {
+        try {
+          const bookTags = await api.getBookTags(bookId)
+          for (const tag of bookTags) {
+            await api.removeBookTag(bookId, tag.id)
+          }
+        } catch {
+          failedBooks += 1
+        }
+      }
+      qc.invalidateQueries({ queryKey: ['books'] })
+      qc.invalidateQueries({ queryKey: ['tags'] })
+      await refreshSelectionHasTaggedBooks()
+      if (failedBooks > 0) {
+        window.alert(`Cleared tags for most books, but ${failedBooks} book${failedBooks === 1 ? '' : 's'} failed. Please try again.`)
+      }
+    } finally {
+      setClearingTags(false)
     }
   }
 
@@ -202,7 +260,7 @@ export default function FilterBar() {
           </button>
 
           {tags.length > 0 && (
-            <div className="relative w-40">
+            <div className="relative w-28">
               <select
                 defaultValue=""
                 onChange={e => { if (e.target.value) handleBulkTag(e.target.value); e.target.value = '' }}
@@ -217,6 +275,17 @@ export default function FilterBar() {
               </select>
               <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
             </div>
+          )}
+
+          {selectionHasTaggedBooks && (
+            <button
+              type="button"
+              onClick={handleBulkClearTags}
+              disabled={selectedBookIds.length === 0 || clearingTags}
+              className="px-3 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Clear Tags
+            </button>
           )}
 
           <button
@@ -409,52 +478,48 @@ export default function FilterBar() {
     ].join(' ')}>
 
       {/* Mobile: search bar row with Filters + Views triggers on the right */}
-      <div className="lg:hidden flex items-center gap-2">
-        <div className="flex-1">
-          <SearchBar />
-        </div>
+      <div className={`lg:hidden flex items-center gap-2${selectionMode ? ' hidden' : ''}`}>
+          <div className="flex-1">
+            <SearchBar />
+          </div>
 
-        {!selectionMode && (
-          <>
-            {/* Filters trigger */}
-            <button
-              type="button"
-              onClick={() => toggleMobilePanel('filters')}
-              className={[
-                'relative flex items-center justify-center w-10 h-10 shrink-0 rounded border bg-surface-raised transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                mobilePanel === 'filters'
-                  ? 'border-accent text-accent bg-accent/10'
-                  : hasActiveFilters
-                    ? 'border-accent text-accent'
-                    : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
-              ].join(' ')}
-              aria-expanded={mobilePanel === 'filters'}
-              aria-label="Filters"
-            >
-              <SlidersHorizontal size={14} />
-              {hasActiveFilters && mobilePanel !== 'filters' && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent border-2 border-surface" />
-              )}
-            </button>
-
-            {/* Views trigger */}
-            <button
-              type="button"
-              onClick={() => toggleMobilePanel('views')}
-              className={[
-                'flex items-center justify-center w-10 h-10 shrink-0 rounded border bg-surface-raised transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                mobilePanel === 'views'
-                  ? 'border-accent text-accent bg-accent/10'
+          {/* Filters trigger */}
+          <button
+            type="button"
+            onClick={() => toggleMobilePanel('filters')}
+            className={[
+              'relative flex items-center justify-center w-10 h-10 shrink-0 rounded border bg-surface-raised transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              mobilePanel === 'filters'
+                ? 'border-accent text-accent bg-accent/10'
+                : hasActiveFilters
+                  ? 'border-accent text-accent'
                   : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
-              ].join(' ')}
-              aria-expanded={mobilePanel === 'views'}
-              aria-label="View options"
-            >
-              {viewMode === 'grid' ? <Grid2x2 size={14} /> : <List size={14} />}
-            </button>
-          </>
-        )}
-      </div>
+            ].join(' ')}
+            aria-expanded={mobilePanel === 'filters'}
+            aria-label="Filters"
+          >
+            <SlidersHorizontal size={14} />
+            {hasActiveFilters && mobilePanel !== 'filters' && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent border-2 border-surface" />
+            )}
+          </button>
+
+          {/* Views trigger */}
+          <button
+            type="button"
+            onClick={() => toggleMobilePanel('views')}
+            className={[
+              'flex items-center justify-center w-10 h-10 shrink-0 rounded border bg-surface-raised transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              mobilePanel === 'views'
+                ? 'border-accent text-accent bg-accent/10'
+                : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
+            ].join(' ')}
+            aria-expanded={mobilePanel === 'views'}
+            aria-label="View options"
+          >
+            {viewMode === 'grid' ? <Grid2x2 size={14} /> : <List size={14} />}
+          </button>
+        </div>
 
       {/* Desktop + mobile selection toolbar row */}
       <div className={`flex items-center justify-between gap-3${selectionMode ? '' : ' hidden lg:flex'}`}>
