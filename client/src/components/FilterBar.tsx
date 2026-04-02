@@ -221,15 +221,10 @@ export default function FilterBar() {
 
   const btnCls = "px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
 
-  // ── Selection toolbar ──────────────────────────────────────────────────────
   const selectionToolbar = (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 w-full">
       {/* Left group: selection helpers */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Count: desktop only — on mobile/tablet it appears bottom-right */}
-        <span className="hidden lg:block text-sm font-medium text-ink shrink-0">
-          {selectedBookIds.length} selected
-        </span>
         <button type="button" onClick={() => selectAllBooks(visibleBookIds)} className={btnCls}>Select Page</button>
         <button type="button" onClick={handleSelectAllLibrary} className={btnCls}>Select All</button>
         <button type="button" onClick={clearSelection} className={btnCls}>Clear</button>
@@ -296,16 +291,6 @@ export default function FilterBar() {
           <X size={13} />
           Exit
         </button>
-
-        {/* Count: tablet only — end of right group */}
-        <span className="hidden sm:block lg:hidden text-sm font-medium text-ink shrink-0">
-          {selectedBookIds.length} selected
-        </span>
-      </div>
-
-      {/* Count: mobile only — bottom right */}
-      <div className="flex justify-end sm:hidden">
-        <span className="text-sm font-medium text-ink">{selectedBookIds.length} selected</span>
       </div>
     </div>
   )
