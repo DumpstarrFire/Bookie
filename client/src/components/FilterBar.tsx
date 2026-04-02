@@ -244,7 +244,7 @@ export default function FilterBar() {
         </button>
 
         {tags.length > 0 && (
-          <div className="relative w-24">
+          <div className="relative w-32">
             <select
               defaultValue=""
               onChange={e => { if (e.target.value) handleBulkTag(e.target.value); e.target.value = '' }}
@@ -327,7 +327,7 @@ export default function FilterBar() {
       )}
 
       {seriesList.length > 0 && (
-        <Sel width="w-36">
+        <Sel width="w-32">
           <select
             value={filters.series}
             onChange={e => setFilters({ series: e.target.value })}
@@ -342,7 +342,7 @@ export default function FilterBar() {
         </Sel>
       )}
 
-      <Sel width="w-36">
+      <Sel width="w-32">
         <select
           value={filters.sort}
           onChange={e => setFilters({ sort: e.target.value as typeof filters.sort })}
@@ -382,7 +382,7 @@ export default function FilterBar() {
   const viewControls = (
     <div className="flex flex-wrap items-center gap-2">
       {/* Per-page dropdown */}
-      <div className="relative w-28">
+      <div className="relative w-32">
         <select
           value={perPage}
           onChange={e => setPerPage(Number(e.target.value))}
@@ -398,7 +398,7 @@ export default function FilterBar() {
 
       {/* Grid size — only in grid mode */}
       {viewMode === 'grid' && (
-        <div className="relative w-28">
+        <div className="relative w-32">
           <select
             value={gridSize}
             onChange={e => setGridSize(Number(e.target.value))}
