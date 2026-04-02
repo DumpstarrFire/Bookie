@@ -382,11 +382,11 @@ export default function FilterBar() {
   const viewControls = (
     <div className="flex flex-wrap items-center gap-2">
       {/* Per-page dropdown */}
-      <div className="relative">
+      <div className="relative w-28">
         <select
           value={perPage}
           onChange={e => setPerPage(Number(e.target.value))}
-          className={selectCls}
+          className={`${selectCls} w-full`}
           aria-label="Books per page"
         >
           {PER_PAGE_OPTIONS.map(n => (
@@ -398,11 +398,11 @@ export default function FilterBar() {
 
       {/* Grid size — only in grid mode */}
       {viewMode === 'grid' && (
-        <div className="relative">
+        <div className="relative w-28">
           <select
             value={gridSize}
             onChange={e => setGridSize(Number(e.target.value))}
-            className={selectCls}
+            className={`${selectCls} w-full`}
             aria-label="Grid size"
           >
             {GRID_SIZES.map(s => (
