@@ -156,8 +156,13 @@ export default function UploadPage({ onClose }: Props) {
                   <p className="text-sm text-ink truncate">{item.file.name}</p>
                   <p className="text-xs text-ink-muted">{(item.file.size / 1024 / 1024).toFixed(1)} MB</p>
                   {item.status === 'uploading' && (
-                    <div className="mt-1.5 h-1 bg-surface-raised rounded-full overflow-hidden">
-                      <div className="h-full bg-accent rounded-full transition-all duration-200" style={{ width: `${item.progress}%` }} />
+                    <div className="mt-1.5 space-y-1">
+                      <div className="h-1 bg-surface-raised rounded-full overflow-hidden">
+                        <div className="h-full bg-accent rounded-full transition-all duration-200" style={{ width: `${item.progress}%` }} />
+                      </div>
+                      {item.progress >= 100 && (
+                        <p className="text-xs text-ink-muted">Processing — this may take a moment…</p>
+                      )}
                     </div>
                   )}
                   {item.status === 'error' && <p className="text-xs text-danger mt-0.5">{item.error}</p>}
