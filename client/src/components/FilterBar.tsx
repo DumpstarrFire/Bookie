@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Grid2x2, List, SlidersHorizontal, ChevronDown, X, Trash2 } from 'lucide-react'
 import { useStore } from '../store'
 import * as api from '../api/client'
-import { BooksResponse, Tag } from '../types'
+import { Tag } from '../types'
 import SearchBar from './SearchBar'
 
 const FORMAT_OPTIONS = [
@@ -47,7 +47,7 @@ const selectCls = [
 export default function FilterBar() {
   const {
     filters, setFilters, viewMode, setViewMode, gridSize, setGridSize,
-    page, perPage, setPerPage,
+    perPage, setPerPage,
     selectionMode, selectedBookIds, visibleBookIds, setSelectionMode, clearSelection, selectAllBooks,
   } = useStore()
   // 'filters' | 'views' | null — only one panel open at a time on mobile
@@ -55,6 +55,7 @@ export default function FilterBar() {
   const [deleting, setDeleting] = useState(false)
   const [tagging, setTagging] = useState(false)
   const [clearingTags, setClearingTags] = useState(false)
+  const [selectionHasTaggedBooks, setSelectionHasTaggedBooks] = useState(false)
   const [fetchingMeta, setFetchingMeta] = useState(false)
   const [fetchMetaProgress, setFetchMetaProgress] = useState<{ done: number; total: number } | null>(null)
   const qc = useQueryClient()
@@ -92,23 +93,26 @@ export default function FilterBar() {
     queryFn: () => api.getSeries(),
   })
 
-  const { data: booksData } = useQuery<BooksResponse>({
-    queryKey: ['books', filters, page, perPage],
-    queryFn: () =>
-      api.getBooks({
-        page,
-        per_page: perPage,
-        q: filters.q || undefined,
-        format: filters.format || undefined,
-        tag: filters.tag || undefined,
-        series: filters.series || undefined,
-        sort: filters.sort,
-        order: filters.order,
-      }),
-    placeholderData: prev => prev,
-  })
-  const selectedBooksOnPage = (booksData?.books ?? []).filter(book => selectedBookIds.includes(book.id))
-  const selectionHasTaggedBooks = selectedBooksOnPage.some(book => book.tags.length > 0)
+  useEffect(() => {
+    let cancelled = false
+
+    const checkSelectedTags = async () => {
+      if (!selectionMode || selectedBookIds.length === 0) {
+        setSelectionHasTaggedBooks(false)
+        return
+      }
+
+      try {
+        const tagLists = await Promise.all(selectedBookIds.map(bookId => api.getBookTags(bookId)))
+        if (!cancelled) setSelectionHasTaggedBooks(tagLists.some(tagsForBook => tagsForBook.length > 0))
+      } catch {
+        if (!cancelled) setSelectionHasTaggedBooks(false)
+      }
+    }
+
+    checkSelectedTags()
+    return () => { cancelled = true }
+  }, [selectionMode, selectedBookIds])
 
   const hasActiveFilters =
     filters.format !== '' || filters.tag !== '' || filters.series !== '' ||
