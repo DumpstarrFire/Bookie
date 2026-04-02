@@ -249,7 +249,7 @@ export default function FilterBar() {
         </button>
 
         {tags.length > 0 && (
-          <div className="relative">
+          <div className="relative w-24">
             <select
               defaultValue=""
               onChange={e => { if (e.target.value) handleBulkTag(e.target.value); e.target.value = '' }}
