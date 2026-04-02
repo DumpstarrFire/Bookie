@@ -24,6 +24,9 @@ A self-hosted ebook manager built for simplicity. Organize your library, fetch m
 
 <img width="820" height="597" alt="image" src="https://github.com/user-attachments/assets/f6cbe98d-319f-4b6e-92fb-785a3f90ccba" />
 
+>[!NOTE]
+>When migrating from a different solution, it is recommended you import your books into Bookie to ensure proper metadata management.
+
 ## Docker Compose
 
 ```yaml
