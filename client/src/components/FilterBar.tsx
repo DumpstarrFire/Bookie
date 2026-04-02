@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Grid2x2, List, SlidersHorizontal, ChevronDown, X, Tag as TagIcon, Trash2, RefreshCw } from 'lucide-react'
+import { Grid2x2, List, SlidersHorizontal, ChevronDown, X, Trash2 } from 'lucide-react'
 import { useStore } from '../store'
 import * as api from '../api/client'
 import { Tag } from '../types'
@@ -163,84 +163,88 @@ export default function FilterBar() {
 
   // ── Selection toolbar ──────────────────────────────────────────────────────
   const selectionToolbar = (
-    <div className="flex items-center justify-between gap-3 w-full flex-wrap">
-      <div className="flex items-center gap-2 flex-wrap">
+    <div className="w-full space-y-2">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => selectAllBooks(visibleBookIds)}
+            className="px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
+          >
+            Select Page
+          </button>
+          <button
+            type="button"
+            onClick={handleSelectAllLibrary}
+            className="px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
+          >
+            Select All
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap md:justify-end">
+          <button
+            type="button"
+            onClick={handleBulkFetchMetadata}
+            disabled={selectedBookIds.length === 0 || fetchingMeta}
+            className="px-3 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {fetchingMeta && fetchMetaProgress
+              ? `Fetching ${fetchMetaProgress.done}/${fetchMetaProgress.total}…`
+              : 'Fetch Metadata'}
+          </button>
+
+          {tags.length > 0 && (
+            <div className="relative w-40">
+              <select
+                defaultValue=""
+                onChange={e => { if (e.target.value) handleBulkTag(e.target.value); e.target.value = '' }}
+                disabled={selectedBookIds.length === 0 || tagging}
+                className={`${selectCls} w-full`}
+                aria-label="Assign tag to selected books"
+              >
+                <option value="">Tags</option>
+                {tags.map(t => (
+                  <option key={t.id} value={t.name}>{t.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleBulkDelete}
+            disabled={selectedBookIds.length === 0 || deleting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-red-500/40 bg-red-500/10 text-red-400 text-sm hover:bg-red-500/20 hover:border-red-500/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Trash2 size={13} />
+            Delete{selectedBookIds.length > 0 ? ` (${selectedBookIds.length})` : ''}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectionMode(false)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
+            aria-label="Exit selection mode"
+          >
+            <X size={13} />
+            Exit
+          </button>
+        </div>
+      </div>
+
+      <div className="flex justify-end lg:justify-start">
         <span className="text-sm font-medium text-ink">
           {selectedBookIds.length} selected
         </span>
-        <button
-          type="button"
-          onClick={() => selectAllBooks(visibleBookIds)}
-          className="px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
-        >
-          Select Page
-        </button>
-        <button
-          type="button"
-          onClick={handleSelectAllLibrary}
-          className="px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
-        >
-          Select All
-        </button>
-        <button
-          type="button"
-          onClick={clearSelection}
-          className="px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
-        >
-          Clear
-        </button>
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          type="button"
-          onClick={handleBulkFetchMetadata}
-          disabled={selectedBookIds.length === 0 || fetchingMeta}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <RefreshCw size={13} className={fetchingMeta ? 'animate-spin' : ''} />
-          {fetchingMeta && fetchMetaProgress
-            ? `Fetching ${fetchMetaProgress.done}/${fetchMetaProgress.total}…`
-            : 'Fetch Metadata'}
-        </button>
-
-        {tags.length > 0 && (
-          <div className="relative w-40">
-            <select
-              defaultValue=""
-              onChange={e => { if (e.target.value) handleBulkTag(e.target.value); e.target.value = '' }}
-              disabled={selectedBookIds.length === 0 || tagging}
-              className={`${selectCls} w-full`}
-              aria-label="Assign tag to selected books"
-            >
-              <option value="">Assign Tag…</option>
-              {tags.map(t => (
-                <option key={t.id} value={t.name}>{t.name}</option>
-              ))}
-            </select>
-            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={handleBulkDelete}
-          disabled={selectedBookIds.length === 0 || deleting}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-red-500/40 bg-red-500/10 text-red-400 text-sm hover:bg-red-500/20 hover:border-red-500/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Trash2 size={13} />
-          Delete{selectedBookIds.length > 0 ? ` (${selectedBookIds.length})` : ''}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSelectionMode(false)}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
-          aria-label="Exit selection mode"
-        >
-          <X size={13} />
-          Exit
-        </button>
       </div>
     </div>
   )

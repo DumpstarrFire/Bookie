@@ -383,7 +383,7 @@ export function setCoverFromUrl(bookId: number, url: string): Promise<Book> {
 
 export function uploadCoverFile(bookId: number, file: File): Promise<Book> {
   const formData = new FormData()
-  formData.append('cover', file)
+  formData.append('file', file)
   return fetch(`/api/books/${bookId}/cover`, {
     method: 'POST', credentials: 'include', body: formData,
   }).then(async r => {

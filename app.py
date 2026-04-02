@@ -933,8 +933,9 @@ def create_app():
     @login_required
     def upload_cover(book_id):
         book = Book.query.get_or_404(book_id)
-        if "file" in request.files:
-            data = request.files["file"].read()
+        file_obj = request.files.get("file") or request.files.get("cover")
+        if file_obj:
+            data = file_obj.read()
         else:
             body = request.get_json(silent=True) or {}
             url = body.get("url")
