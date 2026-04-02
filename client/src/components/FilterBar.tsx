@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Grid2x2, List, SlidersHorizontal, ChevronDown, X, Tag as TagIcon, Trash2 } from 'lucide-react'
+import { Grid2x2, List, SlidersHorizontal, ChevronDown, X, Tag as TagIcon, Trash2, RefreshCw } from 'lucide-react'
 import { useStore } from '../store'
 import * as api from '../api/client'
-import { Tag, BooksResponse } from '../types'
+import { Tag } from '../types'
 import SearchBar from './SearchBar'
 
 const FORMAT_OPTIONS = [
@@ -46,14 +46,16 @@ const selectCls = [
 
 export default function FilterBar() {
   const {
-    filters, page, setFilters, viewMode, setViewMode, gridSize, setGridSize,
+    filters, setFilters, viewMode, setViewMode, gridSize, setGridSize,
     perPage, setPerPage,
-    selectionMode, selectedBookIds, setSelectionMode, clearSelection, selectAllBooks,
+    selectionMode, selectedBookIds, visibleBookIds, setSelectionMode, clearSelection, selectAllBooks,
   } = useStore()
   // 'filters' | 'views' | null — only one panel open at a time on mobile
   const [mobilePanel, setMobilePanel] = useState<'filters' | 'views' | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [tagging, setTagging] = useState(false)
+  const [fetchingMeta, setFetchingMeta] = useState(false)
+  const [fetchMetaProgress, setFetchMetaProgress] = useState<{ done: number; total: number } | null>(null)
   const qc = useQueryClient()
 
   const toggleMobilePanel = (panel: 'filters' | 'views') =>
@@ -131,6 +133,34 @@ export default function FilterBar() {
     }
   }
 
+  const handleBulkFetchMetadata = async () => {
+    if (selectedBookIds.length === 0 || fetchingMeta) return
+    setFetchingMeta(true)
+    setFetchMetaProgress({ done: 0, total: selectedBookIds.length })
+    // Process one at a time so we can show progress and avoid hammering APIs
+    for (let i = 0; i < selectedBookIds.length; i++) {
+      try {
+        await api.bulkFetchMetadata([selectedBookIds[i]])
+      } catch { /* continue on individual failure */ }
+      setFetchMetaProgress({ done: i + 1, total: selectedBookIds.length })
+    }
+    setFetchingMeta(false)
+    setFetchMetaProgress(null)
+    qc.invalidateQueries({ queryKey: ['books'] })
+  }
+
+  const handleSelectAllLibrary = async () => {
+    try {
+      const { ids } = await api.getBookIds({
+        q: filters.q || undefined,
+        format: filters.format || undefined,
+        tag: filters.tag || undefined,
+        series: filters.series || undefined,
+      })
+      selectAllBooks(ids)
+    } catch { /* ignore */ }
+  }
+
   // ── Selection toolbar ──────────────────────────────────────────────────────
   const selectionToolbar = (
     <div className="flex items-center justify-between gap-3 w-full flex-wrap">
@@ -140,10 +170,14 @@ export default function FilterBar() {
         </span>
         <button
           type="button"
-          onClick={() => {
-            const booksData = qc.getQueryData<BooksResponse>(['books', filters, page])
-            if (booksData?.books) selectAllBooks(booksData.books.map(b => b.id))
-          }}
+          onClick={() => selectAllBooks(visibleBookIds)}
+          className="px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
+        >
+          Select Page
+        </button>
+        <button
+          type="button"
+          onClick={handleSelectAllLibrary}
           className="px-2.5 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors"
         >
           Select All
@@ -158,6 +192,18 @@ export default function FilterBar() {
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={handleBulkFetchMetadata}
+          disabled={selectedBookIds.length === 0 || fetchingMeta}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <RefreshCw size={13} className={fetchingMeta ? 'animate-spin' : ''} />
+          {fetchingMeta && fetchMetaProgress
+            ? `Fetching ${fetchMetaProgress.done}/${fetchMetaProgress.total}…`
+            : 'Fetch Metadata'}
+        </button>
+
         {tags.length > 0 && (
           <div className="relative w-40">
             <select
@@ -167,10 +213,7 @@ export default function FilterBar() {
               className={`${selectCls} w-full`}
               aria-label="Assign tag to selected books"
             >
-              <option value="">
-                <TagIcon size={13} />
-                Assign Tag…
-              </option>
+              <option value="">Assign Tag…</option>
               {tags.map(t => (
                 <option key={t.id} value={t.name}>{t.name}</option>
               ))}

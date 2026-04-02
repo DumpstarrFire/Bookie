@@ -134,7 +134,7 @@ export default function UploadPage({ onClose }: Props) {
           <Upload className={`w-8 h-8 ${dragging ? 'text-accent' : 'text-ink-muted'}`} />
           <div className="text-center">
             <p className="text-sm font-medium text-ink">Drop files or folders here</p>
-            <p className="text-xs text-ink-muted mt-1">EPUB, PDF, MOBI, AZW3, FB2, DJVU, CBZ, CBR, TXT · max 35 MB</p>
+            <p className="text-xs text-ink-muted mt-1">EPUB, PDF, MOBI, AZW3, FB2, DJVU, CBZ, CBR, TXT · max 128 MB</p>
           </div>
           <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
             <button

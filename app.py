@@ -195,7 +195,7 @@ logging.getLogger().addHandler(_log_buffer)
 BOOKS_DIR = DATA_DIR / "books"
 COVERS_DIR = DATA_DIR / "covers"
 ALLOWED_EXTENSIONS = {"epub", "pdf", "mobi", "azw", "azw3", "fb2", "djvu", "cbz", "cbr", "txt"}
-MAX_UPLOAD_MB = 35
+MAX_UPLOAD_MB = 128
 
 # Magic-byte signatures for formats where we can reliably verify content.
 # Extensions not listed here are accepted on extension alone (txt, fb2, mobi, etc.
@@ -606,6 +606,45 @@ def create_app():
         db.session.delete(book)
         db.session.commit()
         return jsonify({"success": True})
+
+    @app.route("/api/books/ids", methods=["GET"])
+    @login_required
+    def get_book_ids():
+        """Return all book IDs matching the current filters (no pagination)."""
+        query = Book.query
+        search = request.args.get("q", "").strip()
+        if search:
+            escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            like = f"%{escaped}%"
+            query = query.filter(db.or_(
+                Book.title.ilike(like), Book.author.ilike(like),
+                Book.series.ilike(like), Book.isbn.ilike(like), Book.isbn13.ilike(like),
+            ))
+        fmt = request.args.get("format")
+        if fmt:
+            query = query.filter(Book.file_format == fmt.lower())
+        if series := request.args.get("series"):
+            query = query.filter(Book.series == series)
+        if tag := request.args.get("tag"):
+            query = query.join(BookTag, BookTag.book_id == Book.id).join(Tag, Tag.id == BookTag.tag_id).filter(Tag.name == tag)
+        return jsonify({"ids": [b.id for b in query.with_entities(Book.id).all()]})
+
+    @app.route("/api/books/bulk-fetch-metadata", methods=["POST"])
+    @login_required
+    def bulk_fetch_metadata():
+        """Fetch metadata for a list of book IDs, one at a time."""
+        import time
+        ids = (request.get_json(silent=True) or {}).get("ids", [])
+        updated = 0
+        for book_id in ids:
+            book = Book.query.get(book_id)
+            if not book:
+                continue
+            _auto_fetch_metadata(book)
+            updated += 1
+            if updated < len(ids):
+                time.sleep(1)  # be polite to metadata sources
+        return jsonify({"updated": updated})
 
     @app.route("/api/books/bulk-delete", methods=["POST"])
     @login_required

@@ -87,6 +87,22 @@ export function deleteBook(id: number): Promise<void> {
   return api<void>(`/api/books/${id}`, { method: 'DELETE' })
 }
 
+export function getBookIds(params: Omit<GetBooksParams, 'page' | 'per_page'> = {}): Promise<{ ids: number[] }> {
+  const qs = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+  }
+  const query = qs.toString()
+  return api<{ ids: number[] }>(`/api/books/ids${query ? `?${query}` : ''}`)
+}
+
+export function bulkFetchMetadata(ids: number[]): Promise<{ updated: number }> {
+  return api<{ updated: number }>('/api/books/bulk-fetch-metadata', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  })
+}
+
 export function bulkDeleteBooks(ids: number[]): Promise<{ deleted: number }> {
   return api<{ deleted: number }>('/api/books/bulk-delete', {
     method: 'POST',
