@@ -7,7 +7,7 @@ COPY client/package*.json ./
 RUN npm ci
 
 COPY client/ .
-RUN npm run build
+RUN npm --prefix /app/client run build
 
 # ── Stage 2: Build Python deps ─────────────────────────────
 FROM python:3.12-slim AS py-builder
