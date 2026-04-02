@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Grid2x2, List, SlidersHorizontal, ChevronDown, X, Trash2 } from 'lucide-react'
 import { useStore } from '../store'
@@ -54,6 +54,8 @@ export default function FilterBar() {
   const [mobilePanel, setMobilePanel] = useState<'filters' | 'views' | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [tagging, setTagging] = useState(false)
+  const [clearingTags, setClearingTags] = useState(false)
+  const [selectionHasTaggedBooks, setSelectionHasTaggedBooks] = useState(false)
   const [untagging, setUntagging] = useState(false)
   const [fetchingMeta, setFetchingMeta] = useState(false)
   const [fetchMetaProgress, setFetchMetaProgress] = useState<{ done: number; total: number } | null>(null)
@@ -92,6 +94,34 @@ export default function FilterBar() {
     queryFn: () => api.getSeries(),
   })
 
+  const refreshSelectionHasTaggedBooks = useCallback(async () => {
+    if (!selectionMode || selectedBookIds.length === 0) {
+      setSelectionHasTaggedBooks(false)
+      return
+    }
+    try {
+      for (const bookId of selectedBookIds) {
+        const tagsForBook = await api.getBookTags(bookId)
+        if (tagsForBook.length > 0) {
+          setSelectionHasTaggedBooks(true)
+          return
+        }
+      }
+      setSelectionHasTaggedBooks(false)
+    } catch {
+      setSelectionHasTaggedBooks(false)
+    }
+  }, [selectionMode, selectedBookIds])
+
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      await refreshSelectionHasTaggedBooks()
+      if (cancelled) return
+    }
+    run()
+    return () => { cancelled = true }
+  }, [refreshSelectionHasTaggedBooks])
   useEffect(() => {
     let cancelled = false
 
@@ -148,6 +178,7 @@ export default function FilterBar() {
     setTagging(true)
     try {
       await api.bulkAddTag(selectedBookIds, tagName)
+      setSelectionHasTaggedBooks(true)
       qc.invalidateQueries({ queryKey: ['books'] })
       qc.invalidateQueries({ queryKey: ['tags'] })
     } finally {
@@ -155,6 +186,29 @@ export default function FilterBar() {
     }
   }
 
+  const handleBulkClearTags = async () => {
+    if (selectedBookIds.length === 0) return
+    setClearingTags(true)
+    let failedBooks = 0
+    try {
+      for (const bookId of selectedBookIds) {
+        try {
+          const bookTags = await api.getBookTags(bookId)
+          for (const tag of bookTags) {
+            await api.removeBookTag(bookId, tag.id)
+          }
+        } catch {
+          failedBooks += 1
+        }
+      }
+      qc.invalidateQueries({ queryKey: ['books'] })
+      qc.invalidateQueries({ queryKey: ['tags'] })
+      await refreshSelectionHasTaggedBooks()
+      if (failedBooks > 0) {
+        window.alert(`Cleared tags for most books, but ${failedBooks} book${failedBooks === 1 ? '' : 's'} failed. Please try again.`)
+      }
+    } finally {
+      setClearingTags(false)
   const handleBulkRemoveTag = async (tagName: string) => {
     if (!tagName || selectedBookIds.length === 0) return
     setUntagging(true)
@@ -253,6 +307,15 @@ export default function FilterBar() {
             </div>
           )}
 
+          {selectionHasTaggedBooks && (
+            <button
+              type="button"
+              onClick={handleBulkClearTags}
+              disabled={selectedBookIds.length === 0 || clearingTags}
+              className="px-3 py-1.5 rounded border border-line bg-surface-raised text-ink-muted text-sm hover:text-ink hover:border-line-strong transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Clear Tags
+            </button>
           {tags.length > 0 && (
             <div className="relative w-28">
               <select
@@ -460,6 +523,8 @@ export default function FilterBar() {
       barHidden ? '-translate-y-full lg:translate-y-0' : 'translate-y-0',
     ].join(' ')}>
 
+      {/* Mobile: search bar row with Filters + Views triggers on the right */}
+      <div className={`lg:hidden flex items-center gap-2${selectionMode ? ' hidden' : ''}`}>
       {/* Mobile/tablet: search + panel triggers (hidden in selection mode) */}
       {!selectionMode && (
         <div className="lg:hidden flex items-center gap-2">

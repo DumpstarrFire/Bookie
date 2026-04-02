@@ -1,0 +1,8 @@
+{
+  "name": "bookie-monorepo",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix client run build",
+    "build:client": "npm --prefix client run build"
+  }
+}
