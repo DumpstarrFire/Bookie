@@ -128,7 +128,7 @@ export default function CoverDialog({ bookTitle, bookAuthor, onClose, onSelected
       wide
       panelClassName="h-[75dvh] sm:h-auto"
     >
-      <div className="p-4 space-y-3">
+      <div className="p-4 h-full min-h-0 flex flex-col gap-3">
         {/* Search bar */}
         <div className="flex gap-2">
           <input
@@ -150,44 +150,46 @@ export default function CoverDialog({ bookTitle, bookAuthor, onClose, onSelected
         </div>
 
         {/* Results grid */}
-        {searching && (
-          <div className="flex justify-center py-8"><Spinner size={24} /></div>
-        )}
-        {!searching && coverResults.length > 0 && (
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-72 overflow-y-auto pr-1">
-            {coverResults.map((r, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => selectSearchResult(r.cover_url)}
-                className={[
-                  'relative rounded-lg overflow-hidden border-2 transition-all',
-                  selectedUrl === r.cover_url ? 'border-accent' : 'border-transparent hover:border-line',
-                ].join(' ')}
-                title={`${r.title} (${SOURCE_LABELS[r.source] ?? r.source})`}
-              >
-                <img
-                  src={r.cover_url}
-                  alt={r.title}
-                  loading="lazy"
-                  className="w-full aspect-[2/3] object-cover bg-surface-raised"
-                  onError={e => (e.currentTarget.closest('button')!.style.display = 'none')}
-                />
-                <span className="absolute bottom-0 left-0 right-0 text-[8px] bg-black/60 text-white px-0.5 py-0.5 truncate text-center leading-tight">
-                  {SOURCE_LABELS[r.source] ?? r.source}
-                </span>
-                {selectedUrl === r.cover_url && (
-                  <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-accent flex items-center justify-center">
-                    <Check size={10} className="text-white" />
+        <div className="flex-1 min-h-0">
+          {searching && (
+            <div className="flex h-full min-h-24 items-center justify-center"><Spinner size={24} /></div>
+          )}
+          {!searching && coverResults.length > 0 && (
+            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 overflow-y-auto pr-1 h-full min-h-0 sm:max-h-72 content-start">
+              {coverResults.map((r, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => selectSearchResult(r.cover_url)}
+                  className={[
+                    'relative rounded-lg overflow-hidden border-2 transition-all',
+                    selectedUrl === r.cover_url ? 'border-accent' : 'border-transparent hover:border-line',
+                  ].join(' ')}
+                  title={`${r.title} (${SOURCE_LABELS[r.source] ?? r.source})`}
+                >
+                  <img
+                    src={r.cover_url}
+                    alt={r.title}
+                    loading="lazy"
+                    className="w-full aspect-[2/3] object-cover bg-surface-raised"
+                    onError={e => (e.currentTarget.closest('button')!.style.display = 'none')}
+                  />
+                  <span className="absolute bottom-0 left-0 right-0 text-[8px] bg-black/60 text-white px-0.5 py-0.5 truncate text-center leading-tight">
+                    {SOURCE_LABELS[r.source] ?? r.source}
                   </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-        {!searching && coverResults.length === 0 && searchQuery && (
-          <p className="text-xs text-ink-muted text-center py-2">No covers found — try a different search</p>
-        )}
+                  {selectedUrl === r.cover_url && (
+                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-accent flex items-center justify-center">
+                      <Check size={10} className="text-white" />
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          {!searching && coverResults.length === 0 && searchQuery && (
+            <p className="text-xs text-ink-muted text-center py-2">No covers found — try a different search</p>
+          )}
+        </div>
 
         {/* Selected preview strip */}
         {previewUrl && (
