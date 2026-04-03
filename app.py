@@ -574,6 +574,10 @@ def create_app():
     def update_book(book_id):
         book = Book.query.get_or_404(book_id)
         data = request.get_json(silent=True)
+        if data is None:
+            data = {}
+        elif not isinstance(data, dict):
+            return jsonify({"error": "Invalid JSON payload"}), 400
         fields = [
             "title", "author", "published_date", "page_count",
             "series", "series_order", "rating",
