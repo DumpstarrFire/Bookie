@@ -2,11 +2,11 @@
 
 # Bookie
 
-A self-hosted ebook manager built for simplicity. Organize your library, fetch metadata, and send books directly to your eReader — all from a clean, fast web UI.
+A self-hosted ebook manager built for simplicity. Organize your library, fetch metadata, and send books directly to your eReader.
 
 [![Discord](https://img.shields.io/discord/1408095311661891796?label=Discord&logo=discord&style=for-the-badge)](https://discord.gg/CrsSPrBwsC)
 
-> This project was built with Claude.
+> This project is built with Claude.
 
 <img width="100%" alt="Bookie UI" src="https://github.com/user-attachments/assets/e0755ecb-c6f7-4ed3-b57e-337dd64876e7" />
 
@@ -22,7 +22,6 @@ A self-hosted ebook manager built for simplicity. Organize your library, fetch m
 
 **Organization**
 - Configurable file rename schemes and folder structures
-- Bulk selection and batch operations
 
 <img width="807" height="555" alt="image" src="https://github.com/user-attachments/assets/0cfdb669-6d8e-405f-8bb6-4edea042438e" />
 
