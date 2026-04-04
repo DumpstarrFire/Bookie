@@ -103,7 +103,6 @@ export default function BookCard({ book, onClick }: BookCardProps) {
                 <BookOpen size={32} className="text-ink-faint" />
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity duration-200" />
           </div>
 
           {seriesBadge && (
