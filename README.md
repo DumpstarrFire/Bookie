@@ -46,6 +46,9 @@ services:
 
 Access the UI at http://localhost:5000
 
+## Companion Apps (Unoffical)
+- Bookie Reader https://github.com/OmegaRa/Bookie-Reader
+
 ## License
 
 MIT
