@@ -14,7 +14,10 @@ FROM python:3.12-slim AS py-builder
 
 WORKDIR /build
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+ # Upgrade tar to fix CVE-2025-45582 (two-step symlink path traversal)
+ && apt-get install -y --no-install-recommends \
+    tar \
     gcc \
     libmagic1 \
     libjpeg-dev \
@@ -24,6 +27,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+# Upgrade pip before installing deps to fix CVE-2025-8869 (pip sdist tar path traversal)
+# and CVE-2026-1703 (pip wheel extraction path traversal via os.path.commonprefix bypass)
+RUN pip install --upgrade "pip>=25.3"
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ── Stage 3: Runtime ───────────────────────────────────────
@@ -33,7 +39,10 @@ LABEL org.opencontainers.image.title="Bookie"
 LABEL org.opencontainers.image.description="Self-hosted ebook manager"
 LABEL org.opencontainers.image.licenses="MIT"
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+ # Upgrade tar to fix CVE-2025-45582 (two-step symlink path traversal)
+ && apt-get install -y --no-install-recommends \
+    tar \
     libmagic1 \
     libjpeg62-turbo \
     zlib1g \
