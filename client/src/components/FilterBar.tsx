@@ -414,36 +414,14 @@ export default function FilterBar() {
       )}
 
       {/* View mode toggle */}
-      <div className="flex items-stretch h-8 rounded border border-line overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setViewMode('grid')}
-          aria-label="Grid view"
-          aria-pressed={viewMode === 'grid'}
-          className={[
-            'px-2.5 transition-colors focus-visible:outline-none',
-            viewMode === 'grid'
-              ? 'bg-surface-high text-ink'
-              : 'bg-surface-raised text-ink-muted hover:text-ink',
-          ].join(' ')}
-        >
-          <Grid2x2 size={15} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode('list')}
-          aria-label="List view"
-          aria-pressed={viewMode === 'list'}
-          className={[
-            'px-2.5 transition-colors border-l border-line focus-visible:outline-none',
-            viewMode === 'list'
-              ? 'bg-surface-high text-ink'
-              : 'bg-surface-raised text-ink-muted hover:text-ink',
-          ].join(' ')}
-        >
-          <List size={15} />
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+        aria-label={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+        className="h-8 px-2.5 rounded border border-line bg-surface-raised text-ink-muted hover:text-ink hover:border-line-strong transition-colors focus-visible:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+      >
+        {viewMode === 'grid' ? <Grid2x2 size={15} /> : <List size={15} />}
+      </button>
     </div>
   )
 
