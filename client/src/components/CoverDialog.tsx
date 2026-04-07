@@ -160,6 +160,7 @@ export default function CoverDialog({ bookTitle, bookAuthor, onClose, onSelected
                   alt={r.title}
                   loading="lazy"
                   className="w-full aspect-[2/3] object-cover bg-surface-raised"
+                  onLoad={e => { if (e.currentTarget.naturalHeight < 1000) e.currentTarget.closest('button')!.style.display = 'none' }}
                   onError={e => (e.currentTarget.closest('button')!.style.display = 'none')}
                 />
                 <span className="absolute bottom-0 left-0 right-0 text-[8px] bg-black/60 text-white px-0.5 py-0.5 truncate text-center leading-tight">
